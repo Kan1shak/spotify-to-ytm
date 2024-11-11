@@ -1,3 +1,4 @@
+import time
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -19,6 +20,13 @@ class SetupManager:
             'Playlists' : [],
             'TrashItems' : 0
             # maybe `folders` later?
+        }
+
+        self.persisted_qs = {
+            'Albums' : '',
+            'Artists' : '',
+            'LikedSongs' : '',
+            'Playlists' : '',
         }
 
     def login(self):
@@ -97,7 +105,6 @@ class SetupManager:
         }
 
         headers = {
-            # Example headers, you may need to replace with actual values
             'accept': 'application/json',
             'authorization': authorization,
             'client-token': client_token,
@@ -152,3 +159,147 @@ class SetupManager:
                     'uri' :  data['uri'],
                     # TODO: 'thumb'
                 })
+    
+    def _get_persisted_liked(self):
+        self.driver.get('https://open.spotify.com/collection/tracks')
+        self.driver.implicitly_wait(3)
+
+        logs = self.driver.get_log("performance")
+        try:
+            WebDriverWait(self.driver, 7).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
+            )
+            print("found it!")
+        except TimeoutException:
+            print("woopsies")
+
+        # again
+        self.driver.get('https://open.spotify.com/collection/tracks')
+        self.driver.implicitly_wait(3)
+
+        logs = self.driver.get_log("performance")
+        try:
+            WebDriverWait(self.driver, 7).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
+            )
+            print("found it!")
+        except TimeoutException:
+            print("woopsies")
+
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] == "Network.requestWillBeSent":
+                request = message["params"]["request"]
+                url = request["url"]
+                
+                # `fetchLibraryTracks` is what we need for liked songs
+                if "operationName=fetchLibraryTracks" in url:
+                    headers = request["headers"]
+                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    if client_token and authorization and persisted_query:
+                        self.persisted_qs['LikedSongs'] = persisted_query
+                        print(f"Liked_{persisted_query= :>10}")
+                        return True
+        input("rip likes? whty???")
+        return False
+
+    def _get_persisted_playlists(self):
+        self.driver.get('https://open.spotify.com/playlist/37i9dQZF1DWWylYLMvjuRG')
+        self.driver.implicitly_wait(3)
+
+        try:
+            WebDriverWait(self.driver, 7).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
+            )
+            print("found it!")
+        except TimeoutException:
+            print("woopsies")
+
+        logs = self.driver.get_log("performance")
+
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] == "Network.requestWillBeSent":
+                request = message["params"]["request"]
+                url = request["url"]
+                
+                # `fetchPlaylist` is what we need for playlists
+                if "operationName=fetchPlaylist" in url or "operationName=fetchPlaylistWithGatedEntityRelations" in url:
+                    headers = request["headers"]
+                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    if client_token and authorization and persisted_query:
+                        self.persisted_qs['Playlists'] = persisted_query
+                        print(f"Playlists_{persisted_query= :>10}")
+                        return True
+        return False
+
+    def _get_persisted_albums(self):
+        self.driver.get('https://open.spotify.com/album/19WTqbdqDMWMthZfkmxSbx')
+        self.driver.implicitly_wait(3)
+        
+        try:
+            WebDriverWait(self.driver, 7).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
+            )
+            print("found it!")
+        except TimeoutException:
+            print("woopsies")
+
+        logs = self.driver.get_log("performance")
+
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] == "Network.requestWillBeSent":
+                request = message["params"]["request"]
+                url = request["url"]
+                
+                # `fetchPlaylist` is what we need for playlists
+                if "operationName=getAlbum" in url:
+                    headers = request["headers"]
+                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    if client_token and authorization and persisted_query:
+                        self.persisted_qs['Albums'] = persisted_query
+                        print(f"Albums_{persisted_query= :>10}")
+                        return True
+        return False        
+
+    def _get_persisted_artists(self):
+        self.driver.get('https://open.spotify.com/artist/483Rl4WY6iIJ9czOrOgymb')
+        self.driver.implicitly_wait(3)
+
+        try:
+            WebDriverWait(self.driver, 7).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
+            )
+            print("found it!")
+        except TimeoutException:
+            print("woopsies")
+
+        logs = self.driver.get_log("performance")
+
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] == "Network.requestWillBeSent":
+                request = message["params"]["request"]
+                url = request["url"]
+                
+                # `fetchPlaylist` is what we need for playlists
+                if "operationName=queryArtistOverview" in url:
+                    headers = request["headers"]
+                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    if client_token and authorization and persisted_query:
+                        self.persisted_qs['Artists'] = persisted_query
+                        print(f"Artists_{persisted_query= :>10}")
+                        return True
+        return False
+
+    def get_persist_queries(self):
+        if self.library['Albums']:
+            self._get_persisted_albums()
+        if self.library['Artists']:
+            self._get_persisted_artists()
+        if self.library['Playlists']:
+            self._get_persisted_playlists()
+        if self.library['HasLikedSongs']:
+            self._get_persisted_liked()
+         
