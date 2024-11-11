@@ -1,3 +1,4 @@
 .ipynb_checkpoints/
-webdriver_profile/
+webdriver_profile*/
+__pycache__/
 test.ipynb
