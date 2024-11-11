@@ -8,26 +8,38 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import urllib, json, requests
 
 class SetupManager:
-    def __init__(self):
-        d = DesiredCapabilities.CHROME
-        d['goog:loggingPrefs'] = { 'performance':'ALL' } # this took way too long
-        self.driver = uc.Chrome(user_data_dir= "webdriver_profile2",desired_capabilities=d) 
-        self.login()
-        self.library = {
-            'Albums' : [],
-            'Artists' : [],
-            'HasLikedSongs' : False,
-            'Playlists' : [],
-            'TrashItems' : 0
-            # maybe `folders` later?
-        }
 
-        self.persisted_qs = {
-            'Albums' : '',
-            'Artists' : '',
-            'LikedSongs' : '',
-            'Playlists' : '',
-        }
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._webdriver_running = False
+        return cls._instance
+    
+    def __init__(self):
+        if not self._webdriver_running:
+            d = DesiredCapabilities.CHROME
+            d['goog:loggingPrefs'] = { 'performance':'ALL' } # this took way too long
+            self.driver = uc.Chrome(user_data_dir= "webdriver_profile2",desired_capabilities=d) 
+            self.login()
+            self.library = {
+                'Albums' : [],
+                'Artists' : [],
+                'Folders' : [],
+                'HasLikedSongs' : False,
+                'Playlists' : [],
+                'TrashItems' : 0
+            }
+
+            self.has_p_keys = False
+
+            self.persisted_qs = {
+                'Albums' : '',
+                'Artists' : '',
+                'LikedSongs' : '',
+                'Playlists' : '',
+            }
 
     def login(self):
         # opening the homepage
@@ -131,11 +143,19 @@ class SetupManager:
 
                 if data['__typename'] == 'PseudoPlaylist':
                     self.library['HasLikedSongs'] = True
+                    continue
 
                 if data['__typename'] == 'NotFound':
                     self.library['TrashItems'] += 1
                     continue
                 
+                if data['__typename'] == 'Folder':
+                    self.library['Folders'].append({
+                        'name' : data['name'],
+                        'uri' :  data['uri'],
+                    })
+                    continue
+
                 if data['__typename'] == 'Artist':
                     print(f"{1+cnt}. {data['profile']['name']} ({data['__typename']})")
                     self.library['Artists'].append({
@@ -159,7 +179,8 @@ class SetupManager:
                     'uri' :  data['uri'],
                     # TODO: 'thumb'
                 })
-    
+        return client_token, authorization
+
     def _get_persisted_liked(self):
         self.driver.get('https://open.spotify.com/collection/tracks')
         self.driver.implicitly_wait(3)
@@ -169,7 +190,7 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            print("found it!")
+            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -182,7 +203,7 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            print("found it!")
+            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -200,18 +221,17 @@ class SetupManager:
                         self.persisted_qs['LikedSongs'] = persisted_query
                         print(f"Liked_{persisted_query= :>10}")
                         return True
-        input("rip likes? whty???")
         return False
 
     def _get_persisted_playlists(self):
-        self.driver.get('https://open.spotify.com/playlist/37i9dQZF1DWWylYLMvjuRG')
+        self.driver.get('https://open.spotify.com/playlist/3QqoFD4Y4XaLoQBYkh2cAj')
         self.driver.implicitly_wait(3)
 
         try:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            print("found it!")
+            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -241,7 +261,7 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            print("found it!")
+            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -253,7 +273,7 @@ class SetupManager:
                 request = message["params"]["request"]
                 url = request["url"]
                 
-                # `fetchPlaylist` is what we need for playlists
+                # `getAlbum` is what we need for playlists
                 if "operationName=getAlbum" in url:
                     headers = request["headers"]
                     client_token, authorization, persisted_query = self.extract_auth(url,headers)
@@ -271,7 +291,7 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            print("found it!")
+            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -294,12 +314,13 @@ class SetupManager:
         return False
 
     def get_persist_queries(self):
-        if self.library['Albums']:
-            self._get_persisted_albums()
-        if self.library['Artists']:
-            self._get_persisted_artists()
-        if self.library['Playlists']:
-            self._get_persisted_playlists()
-        if self.library['HasLikedSongs']:
-            self._get_persisted_liked()
-         
+        if not self.has_p_keys:
+            if self.library['Albums']:
+                self._get_persisted_albums()
+            if self.library['Artists']:
+                self._get_persisted_artists()
+            if self.library['Playlists']:
+                self._get_persisted_playlists()
+            if self.library['HasLikedSongs']:
+                self._get_persisted_liked()
+            self.has_p_keys = True
