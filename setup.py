@@ -1,3 +1,4 @@
+import json, os , requests, urllib
 import time
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -5,7 +6,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-import urllib, json, requests
 
 class SetupManager:
 
@@ -13,6 +13,7 @@ class SetupManager:
 
     def __new__(cls):
         if cls._instance is None:
+            print("REALLY LONG MESSAGE AGAGAGA")
             cls._instance = super().__new__(cls)
             cls._instance._webdriver_running = False
         return cls._instance
@@ -21,8 +22,11 @@ class SetupManager:
         if not self._webdriver_running:
             d = DesiredCapabilities.CHROME
             d['goog:loggingPrefs'] = { 'performance':'ALL' } # this took way too long
-            self.driver = uc.Chrome(user_data_dir= "webdriver_profile2",desired_capabilities=d) 
-            self.login()
+            self.driver = uc.Chrome(user_data_dir= "webdriver_profile2",desired_capabilities=d)
+            self._webdriver_running = True
+            
+
+            self._login_spotify()
             self.library = {
                 'Albums' : [],
                 'Artists' : [],
@@ -40,8 +44,12 @@ class SetupManager:
                 'LikedSongs' : '',
                 'Playlists' : '',
             }
+            self.yt_cookies = None
 
-    def login(self):
+        if not self.yt_cookies:
+            self._get_ytm_cookies()
+
+    def _login_spotify(self):
         # opening the homepage
         self.driver.get('https://open.spotify.com')
         
@@ -56,19 +64,26 @@ class SetupManager:
         except TimeoutException:
             logged_in = True
         if not logged_in:
-            input("Please log in first!\nPress any key after you have successfully logged in.")
-        return True
+            input("Please log in to spotify first!\nPress any key after you have successfully logged in.")
+        return logged_in
     
     @staticmethod
-    def extract_auth(url,headers):
-        auth = headers['authorization']
-        c_token = headers['client-token']
-        temp_url = urllib.parse.unquote_plus(url)
-        url_j = json.loads('{"id": ' + temp_url.split('&variables=')[1].replace('&extensions=', ',"extensions":') + '}')
-        persisted =  json.dumps(url_j['extensions'])
-        return c_token, auth, persisted
+    def _extract_auth(url,headers):
+        try:
+            auth = headers['authorization']
+            c_token = headers['client-token']
+            temp_url = urllib.parse.unquote_plus(url)
+            url_j = json.loads('{"id": ' + temp_url.split('&variables=')[1].replace('&extensions=', ',"extensions":') + '}')
+            persisted =  json.dumps(url_j['extensions'])
+            return c_token, auth, persisted
+        except KeyError:
+            temp_url = urllib.parse.unquote_plus(url)
+            url_j = json.loads('{"id": ' + temp_url.split('&variables=')[1].replace('&extensions=', ',"extensions":') + '}')
+            persisted =  json.dumps(url_j['extensions'])
+            return None, None, json.dumps(url_j['extensions'])
 
-    def get_library_auth(self):
+
+    def _get_library_auth(self):
         # turning on network logs
         self.driver.execute_cdp_cmd("Network.enable", {})
         # we go back to homepage
@@ -98,15 +113,12 @@ class SetupManager:
                 # `libraryV3` is what we need for library
                 if "operationName=libraryV3" in url:
                     headers = request["headers"]
-                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         return client_token, authorization, persisted_query
-                    
-        if client_token and authorization and persisted_query:
-            print(f"{client_token=},\n{authorization=},\n{persisted_query=}")
 
     def get_library(self):
-        client_token, authorization, persisted_query = self.get_library_auth()
+        client_token, authorization, persisted_query = self._get_library_auth()
 
         url = 'https://api-partner.spotify.com/pathfinder/v1/query'
         limit = 50
@@ -216,7 +228,7 @@ class SetupManager:
                 # `fetchLibraryTracks` is what we need for liked songs
                 if "operationName=fetchLibraryTracks" in url:
                     headers = request["headers"]
-                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['LikedSongs'] = persisted_query
                         print(f"Liked_{persisted_query= :>10}")
@@ -246,7 +258,7 @@ class SetupManager:
                 # `fetchPlaylist` is what we need for playlists
                 if "operationName=fetchPlaylist" in url or "operationName=fetchPlaylistWithGatedEntityRelations" in url:
                     headers = request["headers"]
-                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['Playlists'] = persisted_query
                         print(f"Playlists_{persisted_query= :>10}")
@@ -276,7 +288,7 @@ class SetupManager:
                 # `getAlbum` is what we need for playlists
                 if "operationName=getAlbum" in url:
                     headers = request["headers"]
-                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['Albums'] = persisted_query
                         print(f"Albums_{persisted_query= :>10}")
@@ -306,7 +318,7 @@ class SetupManager:
                 # `fetchPlaylist` is what we need for playlists
                 if "operationName=queryArtistOverview" in url:
                     headers = request["headers"]
-                    client_token, authorization, persisted_query = self.extract_auth(url,headers)
+                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['Artists'] = persisted_query
                         print(f"Artists_{persisted_query= :>10}")
@@ -324,3 +336,69 @@ class SetupManager:
             if self.library['HasLikedSongs']:
                 self._get_persisted_liked()
             self.has_p_keys = True
+
+    def _login_ytm(self):
+        self.driver.get("https://music.youtube.com/")
+         
+        # check if already logged in:
+        logged_in = False
+        try:
+            WebDriverWait(self.driver,5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '.settings-button'))
+            )
+            logged_in = True
+        except TimeoutException:
+            try:
+                self.driver.find_element(By.CSS_SELECTOR, '.sign-in-link')
+            except:
+                raise "Network Error"
+        if not logged_in:
+            input("Please log in to Youtube Music first!\nYou only have to do this once.\n"
+                  "Press any key after you have successfully logged in.")
+        return logged_in
+    
+    def _get_cookies(self):
+        return self.driver.get_cookies()
+
+    def _get_ytm_cookies(self):
+        self._login_ytm()
+        # turning on network logs again just to be sure
+        self.driver.execute_cdp_cmd("Network.enable", {})
+        # the driver might be already on the home page but going back to ytm just in case
+        self.driver.get('https://music.youtube.com/')
+
+        WebDriverWait(self.driver,5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '.settings-button'))
+        )
+
+        last_height = self.driver.execute_script("return document.body.scrollHeight")
+
+        while True:
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight*0.90);")
+
+            time.sleep(0.5)
+
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+
+        logs = self.driver.get_log("performance")
+
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] == "Network.requestWillBeSent":
+                request = message["params"]["request"]
+                url = request["url"]
+                # `browse?` is what we need for the cookies
+                if "browse?" in url:
+                    print(f"{url = :<10}")
+                    self.yt_cookies = request["headers"]
+                    cookies_j = self._get_cookies()
+                    extracted_c = ""
+                    for cookie in cookies_j:
+                        c = f"{cookie['name']}={cookie['value']}; "
+                        extracted_c += c
+                    self.yt_cookies['cookie'] = extracted_c[:-2]
+                    print(f"{self.yt_cookies=}")
+                    return True
