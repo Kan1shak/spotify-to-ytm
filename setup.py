@@ -13,7 +13,6 @@ class SetupManager:
 
     def __new__(cls):
         if cls._instance is None:
-            print("REALLY LONG MESSAGE AGAGAGA")
             cls._instance = super().__new__(cls)
             cls._instance._webdriver_running = False
         return cls._instance
