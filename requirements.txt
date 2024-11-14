@@ -1,0 +1,4 @@
+undetected-chromedriver
+requests
+ytmusicapi
+thefuzz 
