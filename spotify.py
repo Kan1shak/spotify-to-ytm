@@ -1,14 +1,38 @@
-import requests, json
+import requests, json, os, time
 from setup import SetupManager
 
 class SpotifyManager:
     def __init__(self):
-        self.session = SetupManager()
-        self.client_token, self.authorization = self.session.get_library()
-        self.library = self.session.library
-        if not self.session.has_p_keys:
-            self.session.get_persist_queries()
-        self.persisted_queries = self.session.persisted_qs
+        if os.path.exists('spotify_auth.json'):
+            with open('spotify_auth.json', 'r') as f:
+                saved_data = json.load(f)
+            if time.time() > saved_data['expires']:
+                os.remove('spotify_auth.json')
+            else:
+                self.authorization = saved_data['authorization']
+                self.client_token = saved_data['client_token']
+                self.persisted_queries = saved_data['persisted_queries']
+                self.library = saved_data['library']
+                self.session = None
+                requests.get("http://localhost:5001/update_login?status=true")
+
+        if not os.path.exists('spotify_auth.json'):
+            self.session = SetupManager()
+            self.client_token, self.authorization = self.session.get_library()
+            self.library = self.session.library
+            if not self.session.has_p_keys:
+                self.session.get_persist_queries()
+            self.persisted_queries = self.session.persisted_qs
+            with open('spotify_auth.json', 'w') as f:
+                json.dump({
+                   'client_token'       :   self.client_token,
+                   'authorization'      :   self.authorization,
+                   'library'            :   self.library,
+                   'persisted_queries'  :   self.persisted_queries,
+                   'expires'            :   time.time() + 60*60 # 1 hour expiry for now
+                },f)
+        
+        requests.get("http://localhost:5001/initialized")
 
     def _get_res_from_spot(self, operation, persisted, uri=None,limit=50):
         endpoint = 'https://api-partner.spotify.com/pathfinder/v1/query'
