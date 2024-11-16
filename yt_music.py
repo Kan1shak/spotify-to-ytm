@@ -22,11 +22,12 @@ class YT_Music:
         for result in search_results:
             res_type = result['resultType']
             if  res_type == "video" or res_type == "song":
-                search_dict[result['title']] = result['videoId']
+                search_dict[result['title']] = (result['videoId'], result['artists'])
                 search_arr.append(result['title'])
         
         choice, confidence = process.extractOne(q, search_arr, scorer=fuzz.token_sort_ratio)
-        return (choice,confidence,search_dict[choice])
+        # including artists aswell now
+        return (choice,",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
 
     def search(self,q,limit=5,search_from_limit=25):
         search_results = self.yt_sess.search(q,limit=search_from_limit)
