@@ -12,7 +12,7 @@ class YT_Music:
                 json.dump(self.cookies,f)
 
         self.yt_sess = ytmusicapi.YTMusic("yt_headers.json")
-    
+        self.filter_list = {}
     # fuzzy still needs some work, aint working that well as is
 
     def search_one(self,q,search_from_limit=25):
@@ -31,23 +31,35 @@ class YT_Music:
         # including artists aswell now
         return (search_dict[choice][2],",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
 
-    def search_one_except(self,q,filter_str, search_from_limit=25):
+    def search_one_except(self,q,filter_str, search_from_limit=25,retries=0):
         search_results = self.yt_sess.search(q,limit=search_from_limit)
         # remove the result that contains `filter_str`
         # only search from the `topResult`, 2nd and third result
+        if not q in self.filter_list:
+            self.filter_list[q] = {filter_str,}
+        else:
+            self.filter_list[q].add(filter_str)
         search_dict = {}
         search_arr = []
+        filtered = False
         for result in search_results:
             res_type = result['resultType']
             if  res_type == "video" or res_type == "song":
                 current_str = result['title'] + "," + ",".join([artist['name'] for artist in result['artists']])
-                if current_str == filter_str:
+                if current_str in self.filter_list[q]:
                     print(f"filtered this bozo: {current_str}")
+                    filtered = True
                     continue
                 searchable_text = result['title'] + ",".join([artist['name'] for artist in result['artists']])
                 search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
+        print(self.filter_list[q])
+        print(search_arr)
+        if len(search_arr) == 0:
+            if retries > 2:
+                self.filter_list[q] = set()
+            return self.search_one_except(q,filter_str,search_from_limit+25,retries+1)
         choice, confidence = process.extractOne(q, search_arr)
         # including artists aswell now
         return (search_dict[choice][2],",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])

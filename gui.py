@@ -3,6 +3,7 @@ from spotify import SpotifyManager
 from yt_music import YT_Music
 import threading
 from dataclasses import dataclass
+from urllib.parse import quote
 
 icon_link = Link(rel="stylesheet", href="https://www.nerdfonts.com/assets/css/webfont.css")
 app, rt = fast_app(debug=True,hdrs=(picolink,icon_link))
@@ -173,7 +174,7 @@ def get():
                             Td(new_playlist["items"][idx][0] if len(new_playlist["items"]) >= idx+1 else "",cls="yt-title"), 
                             Td(new_playlist["items"][idx][1] if len(new_playlist["items"]) >= idx+1 else "", cls="yt-artists"),
                             Td(Button(I(cls="nf nf-md-reload"),title="Redo-Prediction",
-                                      hx_get=f"/refetch_item?title={item[0]}&artist={item[1]}&filter_str={new_playlist["items"][idx][0] + "," + new_playlist["items"][idx][1]}&idx={idx}",
+                                      hx_get = f"/refetch_item?title={quote(item[0])}&artist={quote(item[1])}&filter_str={quote(new_playlist['items'][idx][0] + ',' + new_playlist['items'][idx][1])}&idx={idx}",
                                       hx_swap="outerHTML",
                                       hx_target="table")) if len(new_playlist["items"]) >= idx+1 else None
                         ) 
