@@ -29,7 +29,7 @@ class SpotifyManager:
                    'authorization'      :   self.authorization,
                    'library'            :   self.library,
                    'persisted_queries'  :   self.persisted_queries,
-                   'expires'            :   time.time() + 3*60*60 # 3 hour expiry for now
+                   'expires'            :   time.time() + 60*60 # looks like the tokens expire in 1 hour
                 },f)
         
         requests.get("http://localhost:5001/initialized")
@@ -58,6 +58,7 @@ class SpotifyManager:
         extracted = []
         for track in tracks:
             track = track['track'] if 'track' in track else track['data']
+            if track['name'].strip() == '': continue
             artists = "".join([","+artist['profile']['name'] for artist in track['artists']['items']]) if 'artists' in track else ""
             #extracted.append(track['name']+artists)
             # we using tuples now, for the gui

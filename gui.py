@@ -4,7 +4,8 @@ from yt_music import YT_Music
 import threading
 from dataclasses import dataclass
 
-app, rt = fast_app(debug=True, pico=True)
+icon_link = Link(rel="stylesheet", href="https://www.nerdfonts.com/assets/css/webfont.css")
+app, rt = fast_app(debug=True,hdrs=(picolink,icon_link))
 
 user_confirm_login_spot = is_initialized = False
 is_logged_in = None
@@ -146,7 +147,7 @@ class LibraryItem:
             items , _ = spot.get_artists(self.uri)
         else:
             items, _ = spot.get_liked()
-        
+
         old_playlist = items
         layout = Div(
             Titled(f"{self.title} | {self.uri_type.title()}"),
@@ -167,9 +168,15 @@ def get():
     table = Table(
                     Tr(Th("Original Title"), Th("Original Artists"), Th("New Title"), Th("New Artists")),
                     *[
-                        Tr(Td(item[0]), Td(item[1]), 
-                        Td(new_playlist["items"][idx][0] if len(new_playlist["items"]) >= idx+1 else "",cls="yt-title"), 
-                        Td(new_playlist["items"][idx][1] if len(new_playlist["items"]) >= idx+1 else "", cls="yt-artists")) 
+                        Tr(
+                            Td(item[0]), Td(item[1]), 
+                            Td(new_playlist["items"][idx][0] if len(new_playlist["items"]) >= idx+1 else "",cls="yt-title"), 
+                            Td(new_playlist["items"][idx][1] if len(new_playlist["items"]) >= idx+1 else "", cls="yt-artists"),
+                            Td(Button(I(cls="nf nf-md-reload"),title="Redo-Prediction",
+                                      hx_get=f"/refetch_item?title={item[0]}&artist={item[1]}&filter_str={new_playlist["items"][idx][0] + "," + new_playlist["items"][idx][1]}&idx={idx}",
+                                      hx_swap="outerHTML",
+                                      hx_target="table")) if len(new_playlist["items"]) >= idx+1 else None
+                        ) 
                         for idx, item in enumerate(old_playlist)
                     ],
                     id="#item-table"
@@ -187,6 +194,15 @@ def get(uri:str):
                     hx_swap="outerHTML",
                     hx_target="table",
                     id = "update-btn")
+
+@app.get("/refetch_item")
+def get(title:str,artist:str,filter_str:str,idx:int):
+    global yt,new_playlist
+    new_title, new_artist, _, _ = yt.search_one_except(f"{title} {artist}",filter_str)
+    new_playlist['items'][idx] = (new_title,new_artist)
+    return RedirectResponse("/new_table")
+
+
 
 if __name__ == '__main__':
     serve()

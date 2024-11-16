@@ -17,20 +17,43 @@ class YT_Music:
 
     def search_one(self,q,search_from_limit=25):
         search_results = self.yt_sess.search(q,limit=search_from_limit)
+        # only search from the `topResult`, 2nd and third result
         search_dict = {}
         search_arr = []
         for result in search_results:
             res_type = result['resultType']
             if  res_type == "video" or res_type == "song":
-                search_dict[result['title']] = (result['videoId'], result['artists'])
-                search_arr.append(result['title'])
-        
-        choice, confidence = process.extractOne(q, search_arr, scorer=fuzz.token_sort_ratio)
+                searchable_text = result['title'] + ",".join([artist['name'] for artist in result['artists']])
+                search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
+                search_arr.append(searchable_text)
+                if (len(search_arr)) >= 3: break
+        choice, confidence = process.extractOne(q, search_arr)
         # including artists aswell now
-        return (choice,",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
+        return (search_dict[choice][2],",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
+
+    def search_one_except(self,q,filter_str, search_from_limit=25):
+        search_results = self.yt_sess.search(q,limit=search_from_limit)
+        # remove the result that contains `filter_str`
+        # only search from the `topResult`, 2nd and third result
+        search_dict = {}
+        search_arr = []
+        for result in search_results:
+            res_type = result['resultType']
+            if  res_type == "video" or res_type == "song":
+                current_str = result['title'] + "," + ",".join([artist['name'] for artist in result['artists']])
+                if current_str == filter_str:
+                    print(f"filtered this bozo: {current_str}")
+                    continue
+                searchable_text = result['title'] + ",".join([artist['name'] for artist in result['artists']])
+                search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
+                search_arr.append(searchable_text)
+                if (len(search_arr)) >= 3: break
+        choice, confidence = process.extractOne(q, search_arr)
+        # including artists aswell now
+        return (search_dict[choice][2],",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
 
     def search(self,q,limit=5,search_from_limit=25):
-        search_results = self.yt_sess.search(q,limit=search_from_limit)
+        search_results = self.yt_sess.search(q,limit=search_from_limit,ignore_spelling=True)
         search_dict = {}
         search_arr = []
         for result in search_results:
