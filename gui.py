@@ -3,7 +3,7 @@ from spotify import SpotifyManager
 from yt_music import YT_Music
 import threading
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 icon_link = Link(rel="stylesheet", href="https://www.nerdfonts.com/assets/css/webfont.css")
 app, rt = fast_app(debug=True,hdrs=(picolink,icon_link))
@@ -117,7 +117,7 @@ def get(uri:str, title:str="Liked Songs"):
 
 def fetch_equivalents(uri: str):
     global spot, yt, new_playlist
-    new_playlist = {"title" : "", "desc" : "", "items" : []} # these desc and title might come in handy later
+    new_playlist = {"title" : "", "desc" : "", "items" : []} # they didnt...
     if "playlist" in uri:
         items, _ = spot.get_playlist(uri)
     elif "album" in uri:
@@ -128,8 +128,8 @@ def fetch_equivalents(uri: str):
         items, _ = spot.get_liked()
     for item in items:
         song_title, artist_name = item
-        title, artist, _, _ = yt.search_one(f"{song_title} {artist_name}")
-        new_playlist['items'].append((title,artist))
+        title, artist, _, vid_id = yt.search_one(f"{song_title} {artist_name}")
+        new_playlist['items'].append([title,artist,False,vid_id])
 
 
 @dataclass
@@ -160,6 +160,7 @@ class LibraryItem:
             ),
             Button("Go Back", hx_get="/library", hx_target=".main-view"),
             Button("Fetch All YouTube Equivalents", hx_get=f"/start_fetch_equi?uri={self.uri}", hx_swap="outerHTML"),
+            Div(cls="yt-info-box")
         )
         return layout
 
@@ -167,9 +168,10 @@ class LibraryItem:
 def get():
     global new_playlist, old_playlist
     table = Table(
-                    Tr(Th("Original Title"), Th("Original Artists"), Th("New Title"), Th("New Artists")),
+                    Tr(Th("Selected"),Th("Original Title"), Th("Original Artists"), Th("New Title"), Th("New Artists")),
                     *[
                         Tr(
+                            Td(Input(type="checkbox", data_idx=NotStr(str(idx)),checked=True if len(new_playlist["items"]) >= idx+1 else False)),
                             Td(item[0]), Td(item[1]), 
                             Td(new_playlist["items"][idx][0] if len(new_playlist["items"]) >= idx+1 else "",cls="yt-title"), 
                             Td(new_playlist["items"][idx][1] if len(new_playlist["items"]) >= idx+1 else "", cls="yt-artists"),
@@ -183,8 +185,40 @@ def get():
                     id="#item-table"
                 )
     if len(new_playlist["items"]) == len(old_playlist):
-        return table,Button("Done",id ="update-btn",hx_swap_oob="true")
-    else: return table
+        selected_ids = [cnt for cnt, _ in enumerate(new_playlist["items"])]
+        params = {'selectedIds': selected_ids}
+        hx_get = f"/save_selection?{urlencode(params, doseq=True)}"
+        script = """document.addEventListener('change', function(e) {
+    if (e.target.type === 'checkbox') {
+        const updateBtn = document.getElementById('update-btn');
+        const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedIndices = Array.from(checkedBoxes).map(box => box.dataset.idx);
+        if (selectedIndices.length > 0) {
+            const params = new URLSearchParams();
+            selectedIndices.forEach(idx => {
+                params.append('selectedIds', idx);
+            });
+            const baseUrl = '/save_selection'; // replace with your base URL
+            const newUrl = `${baseUrl}?${params.toString()}`;
+            updateBtn.setAttribute('hx-get', newUrl);
+            htmx.process(updateBtn);
+            updateBtn.disabled = false;
+            updateBtn.classList.remove('disabled');
+        } else {
+            updateBtn.disabled = true;
+            updateBtn.classList.add('disabled');
+            updateBtn.removeAttribute('hx-get');
+            htmx.process(updateBtn);
+        }
+    }
+});"""
+        return table,Button("Save Selection",id ="update-btn",hx_swap_oob="true",
+                            hx_get=hx_get,hx_target=".yt-info-box"),Script(script)
+    else: return table,Button("Fetching...",id ="update-btn",hx_swap_oob="true", disabled=True,
+                            hx_get="/new_table", 
+                            hx_trigger="every 0.5s",
+                            hx_swap="outerHTML",
+                            hx_target="table")
 
 @app.get("/start_fetch_equi")
 def get(uri:str):
@@ -203,7 +237,32 @@ def get(title:str,artist:str,filter_str:str,idx:int):
     new_playlist['items'][idx] = (new_title,new_artist)
     return RedirectResponse("/new_table")
 
+@app.get('/save_selection')
+def save_selection(req):
+    # Gets automatically as list
+    global new_playlist
+    selected_ids = req.query_params.multi_items()
+    selected_ids = [int(value) for key, value in selected_ids if key == 'selectedIds']
+    for idx,_ in enumerate(new_playlist["items"]):
+        if idx in selected_ids:
+            new_playlist["items"][idx][2] = True
+    
+    form = Form(Label('Playlist Title',Input(type="text", name="title")),
+                Label('Description (Optional)',Input(type="textarea", name="desc")),
+                Button("Submit"),
+                action="/make_playlist", method="post")
 
+    return P(f"Saved!"), form
+
+
+@app.post('/make_playlist')
+def make_playlist(title:str,desc:str=""):
+    global new_playlist, yt
+    vid_ids = [item[-1] for item in new_playlist["items"] if item[2] == True]
+    if yt.create_and_add(title,desc,vid_ids):
+        return P("Success!")
+    else:
+        return P("Some error occured.")
 
 if __name__ == '__main__':
     serve()

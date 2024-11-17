@@ -41,21 +41,17 @@ class YT_Music:
             self.filter_list[q].add(filter_str)
         search_dict = {}
         search_arr = []
-        filtered = False
         for result in search_results:
             res_type = result['resultType']
             if  res_type == "video" or res_type == "song":
                 current_str = result['title'] + "," + ",".join([artist['name'] for artist in result['artists']])
                 if current_str in self.filter_list[q]:
                     print(f"filtered this bozo: {current_str}")
-                    filtered = True
                     continue
                 searchable_text = result['title'] + ",".join([artist['name'] for artist in result['artists']])
                 search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
-        print(self.filter_list[q])
-        print(search_arr)
         if len(search_arr) == 0:
             if retries > 2:
                 self.filter_list[q] = set()
