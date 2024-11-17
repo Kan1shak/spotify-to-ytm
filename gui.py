@@ -129,7 +129,7 @@ def fetch_equivalents(uri: str):
     for item in items:
         song_title, artist_name = item
         title, artist, _, vid_id = yt.search_one(f"{song_title} {artist_name}")
-        new_playlist['items'].append([title,artist,False,vid_id])
+        new_playlist['items'].append([title,artist,True,vid_id])
 
 
 @dataclass
@@ -171,7 +171,7 @@ def get():
                     Tr(Th("Selected"),Th("Original Title"), Th("Original Artists"), Th("New Title"), Th("New Artists")),
                     *[
                         Tr(
-                            Td(Input(type="checkbox", data_idx=NotStr(str(idx)),checked=True if len(new_playlist["items"]) >= idx+1 else False)),
+                            Td(Input(type="checkbox", data_idx=NotStr(str(idx)),checked=new_playlist["items"][idx][2] if len(new_playlist["items"]) >= idx+1 else False)),
                             Td(item[0]), Td(item[1]), 
                             Td(new_playlist["items"][idx][0] if len(new_playlist["items"]) >= idx+1 else "",cls="yt-title"), 
                             Td(new_playlist["items"][idx][1] if len(new_playlist["items"]) >= idx+1 else "", cls="yt-artists"),
@@ -200,10 +200,12 @@ def get():
             });
             const baseUrl = '/save_selection'; // replace with your base URL
             const newUrl = `${baseUrl}?${params.toString()}`;
+            const bgUrl =  `/bg_save?${params.toString()}`;
             updateBtn.setAttribute('hx-get', newUrl);
             htmx.process(updateBtn);
             updateBtn.disabled = false;
             updateBtn.classList.remove('disabled');
+            htmx.ajax('GET', bgUrl, { swap: 'none',target: 'body'});
         } else {
             updateBtn.disabled = true;
             updateBtn.classList.add('disabled');
@@ -234,8 +236,21 @@ def get(uri:str):
 def get(title:str,artist:str,filter_str:str,idx:int):
     global yt,new_playlist
     new_title, new_artist, _, _ = yt.search_one_except(f"{title} {artist}",filter_str)
-    new_playlist['items'][idx] = (new_title,new_artist)
+    new_playlist['items'][idx][0] = new_title
+    new_playlist['items'][idx][1] = new_artist
     return RedirectResponse("/new_table")
+
+@app.get('/bg_save')
+def save_selection(req):
+    global new_playlist
+    selected_ids = req.query_params.multi_items()
+    selected_ids = [int(value) for key, value in selected_ids if key == 'selectedIds']
+    print("Saved : ", selected_ids)
+    for idx,_ in enumerate(new_playlist["items"]):
+        if idx not in selected_ids:
+            new_playlist["items"][idx][2] = False
+        else:
+            new_playlist["items"][idx][2] = True
 
 @app.get('/save_selection')
 def save_selection(req):
@@ -244,7 +259,9 @@ def save_selection(req):
     selected_ids = req.query_params.multi_items()
     selected_ids = [int(value) for key, value in selected_ids if key == 'selectedIds']
     for idx,_ in enumerate(new_playlist["items"]):
-        if idx in selected_ids:
+        if idx not in selected_ids:
+            new_playlist["items"][idx][2] = False
+        else:
             new_playlist["items"][idx][2] = True
     
     form = Form(Label('Playlist Title',Input(type="text", name="title")),
