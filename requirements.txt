@@ -1,4 +1,5 @@
 undetected-chromedriver
 requests
 ytmusicapi
-thefuzz 
+thefuzz
+python-fasthtml
