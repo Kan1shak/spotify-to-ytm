@@ -117,7 +117,7 @@ def get(uri:str, title:str="Liked Songs"):
 
 def fetch_equivalents(uri: str):
     global spot, yt, new_playlist
-    new_playlist = {"title" : "", "desc" : "", "items" : []} # they didnt...
+    new_playlist = {"title" : "", "desc" : "", "items" : []}
     if "playlist" in uri:
         items, _ = spot.get_playlist(uri)
     elif "album" in uri:
@@ -176,7 +176,7 @@ def get():
                             Td(new_playlist["items"][idx][0] if len(new_playlist["items"]) >= idx+1 else "",cls="yt-title"), 
                             Td(new_playlist["items"][idx][1] if len(new_playlist["items"]) >= idx+1 else "", cls="yt-artists"),
                             Td(Button(I(cls="nf nf-md-reload"),title="Redo-Prediction",
-                                      hx_get = f"/refetch_item?title={quote(item[0])}&artist={quote(item[1])}&filter_str={quote(new_playlist['items'][idx][0] + ',' + new_playlist['items'][idx][1])}&idx={idx}",
+                                      hx_get = f"/refetch_item?title={quote(item[0])}&artist={quote(item[1])}&filter_str={quote(new_playlist['items'][idx][0] + ', ' + new_playlist['items'][idx][1])}&idx={idx}",
                                       hx_swap="outerHTML",
                                       hx_target="table")) if len(new_playlist["items"]) >= idx+1 else None
                         ) 
@@ -185,7 +185,7 @@ def get():
                     id="#item-table"
                 )
     if len(new_playlist["items"]) == len(old_playlist):
-        selected_ids = [cnt for cnt, _ in enumerate(new_playlist["items"])]
+        selected_ids = [idx for idx, item in enumerate(new_playlist["items"]) if item[2] == True]
         params = {'selectedIds': selected_ids}
         hx_get = f"/save_selection?{urlencode(params, doseq=True)}"
         script = """document.addEventListener('change', function(e) {
@@ -235,9 +235,10 @@ def get(uri:str):
 @app.get("/refetch_item")
 def get(title:str,artist:str,filter_str:str,idx:int):
     global yt,new_playlist
-    new_title, new_artist, _, _ = yt.search_one_except(f"{title} {artist}",filter_str)
+    new_title, new_artist, _, video_id = yt.search_one_except(f"{title} {artist}",filter_str)
     new_playlist['items'][idx][0] = new_title
     new_playlist['items'][idx][1] = new_artist
+    new_playlist['items'][idx][-1] = video_id
     return RedirectResponse("/new_table")
 
 @app.get('/bg_save')
@@ -245,7 +246,6 @@ def save_selection(req):
     global new_playlist
     selected_ids = req.query_params.multi_items()
     selected_ids = [int(value) for key, value in selected_ids if key == 'selectedIds']
-    print("Saved : ", selected_ids)
     for idx,_ in enumerate(new_playlist["items"]):
         if idx not in selected_ids:
             new_playlist["items"][idx][2] = False
@@ -263,7 +263,6 @@ def save_selection(req):
             new_playlist["items"][idx][2] = False
         else:
             new_playlist["items"][idx][2] = True
-    
     form = Form(Label('Playlist Title',Input(type="text", name="title")),
                 Label('Description (Optional)',Input(type="textarea", name="desc")),
                 Button("Submit"),

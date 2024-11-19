@@ -13,26 +13,27 @@ class YT_Music:
 
         self.yt_sess = ytmusicapi.YTMusic("yt_headers.json")
         self.filter_list = {}
-    # fuzzy still needs some work, aint working that well as is
 
-    def search_one(self,q,search_from_limit=25):
-        search_results = self.yt_sess.search(q,limit=search_from_limit)
+    def search_one(self,q,search_from_limit=25,filter='songs'):
+        search_results = self.yt_sess.search(q,limit=search_from_limit,filter=filter if filter != '' else None)
         # only search from the `topResult`, 2nd and third result
         search_dict = {}
         search_arr = []
         for result in search_results:
             res_type = result['resultType']
             if  res_type == "video" or res_type == "song":
-                searchable_text = result['title'] + ",".join([artist['name'] for artist in result['artists']])
+                searchable_text = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
                 search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
         choice, confidence = process.extractOne(q, search_arr)
+        if confidence < 65:
+            return self.search_one(q,search_from_limit,filter='')
         # including artists aswell now
-        return (search_dict[choice][2],",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
+        return (search_dict[choice][2],", ".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
 
-    def search_one_except(self,q,filter_str, search_from_limit=25,retries=0):
-        search_results = self.yt_sess.search(q,limit=search_from_limit)
+    def search_one_except(self,q,filter_str, search_from_limit=25,retries=0,filter='songs'):
+        search_results = self.yt_sess.search(q,limit=search_from_limit,filter=filter if filter != '' else None)
         # remove the result that contains `filter_str`
         # only search from the `topResult`, 2nd and third result
         if not q in self.filter_list:
@@ -44,11 +45,11 @@ class YT_Music:
         for result in search_results:
             res_type = result['resultType']
             if  res_type == "video" or res_type == "song":
-                current_str = result['title'] + "," + ",".join([artist['name'] for artist in result['artists']])
+                current_str = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
                 if current_str in self.filter_list[q]:
                     print(f"filtered this bozo: {current_str}")
                     continue
-                searchable_text = result['title'] + ",".join([artist['name'] for artist in result['artists']])
+                searchable_text = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
                 search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
@@ -57,8 +58,10 @@ class YT_Music:
                 self.filter_list[q] = set()
             return self.search_one_except(q,filter_str,search_from_limit+25,retries+1)
         choice, confidence = process.extractOne(q, search_arr)
+        if confidence < 65:
+            return self.search_one_except(q,filter_str, search_from_limit,filter='')
         # including artists aswell now
-        return (search_dict[choice][2],",".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
+        return (search_dict[choice][2],", ".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
 
     def search(self,q,limit=5,search_from_limit=25):
         search_results = self.yt_sess.search(q,limit=search_from_limit,ignore_spelling=True)
@@ -78,8 +81,7 @@ class YT_Music:
             songs = [songs[-1] for song in songs]
         status = self.yt_sess.add_playlist_items(playlist_id,songs)
         if status['status'] == 'STATUS_FAILED':
-            # either there are duplicates in the list or the api limit reached
-            # TODO: show user the duplicate song here and ask them their choice
+            # if duplicates, then prolly duplicates in user's library too, so just add it aswell
             status = self.yt_sess.add_playlist_items(playlist_id,songs,duplicates=True)
             if status['status'] == 'STATUS_FAILED':
                 return False
