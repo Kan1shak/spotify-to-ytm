@@ -27,7 +27,7 @@ class YT_Music:
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
         choice, confidence = process.extractOne(q, search_arr)
-        if confidence < 65:
+        if confidence < 85 and filter != '':
             return self.search_one(q,search_from_limit,filter='')
         # including artists aswell now
         return (search_dict[choice][2],", ".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])
@@ -58,7 +58,7 @@ class YT_Music:
                 self.filter_list[q] = set()
             return self.search_one_except(q,filter_str,search_from_limit+25,retries+1)
         choice, confidence = process.extractOne(q, search_arr)
-        if confidence < 65:
+        if confidence < 85 and filter != '':
             return self.search_one_except(q,filter_str, search_from_limit,filter='')
         # including artists aswell now
         return (search_dict[choice][2],", ".join([artist['name'] for artist in search_dict[choice][1]]),confidence,search_dict[choice][0])

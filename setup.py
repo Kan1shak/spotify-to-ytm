@@ -1,6 +1,7 @@
 import json, requests, urllib
 import time
 import undetected_chromedriver as uc
+from os import path
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -21,9 +22,9 @@ class SetupManager:
         if not self._webdriver_running:
             d = DesiredCapabilities.CHROME
             d['goog:loggingPrefs'] = { 'performance':'ALL' } # this took way too long
-            self.driver = uc.Chrome(user_data_dir= "webdriver_profile2",desired_capabilities=d)
+            pwd = path.dirname(__file__)
+            self.driver = uc.Chrome(user_data_dir= f"{pwd}{path.sep}webdriver_profile2",desired_capabilities=d)
             self._webdriver_running = True
-            
 
             self._login_spotify()
             self.library = {
