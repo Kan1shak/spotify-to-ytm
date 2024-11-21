@@ -1,6 +1,6 @@
 from fasthtml.common import *
-from spotify import SpotifyManager
-from yt_music import YT_Music
+from src.spotify import SpotifyManager
+from src.yt_music import YT_Music
 import threading
 from dataclasses import dataclass
 from urllib.parse import quote, urlencode

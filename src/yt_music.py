@@ -1,7 +1,7 @@
 import os, json
 import ytmusicapi
 from thefuzz import process, fuzz
-from setup import SetupManager
+from src.setup import SetupManager
 
 class YT_Music:
     def __init__(self):

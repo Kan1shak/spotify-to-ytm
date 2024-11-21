@@ -1,5 +1,5 @@
 import requests, json, os, time
-from setup import SetupManager
+from src.setup import SetupManager
 
 class SpotifyManager:
     def __init__(self):
