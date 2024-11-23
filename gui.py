@@ -11,6 +11,8 @@ app, rt = fast_app(debug=True,hdrs=(picolink,icon_link))
 user_confirm_login_spot = is_initialized = False
 is_logged_in = None
 spot = yt = None
+loaded_library = False
+current_playlist_title = None
 
 def start_sess():
     global is_logged_in,spot,yt
@@ -22,7 +24,7 @@ def start_sess():
 def get():
     return Titled("Spotify to YTM", 
         Div(
-            P("Click 'Start' to initiate the process."),
+            P("Welcome! Click the 'Start' button to start the application."),
             Button("Start", hx_get="/start", hx_swap="innerHTML", hx_target=".main-view", id="start-button"),
             cls="main-view"
         )
@@ -32,14 +34,21 @@ def get():
 def get():
     global is_logged_in
     if is_logged_in == None:
-        return P("Please wait while we check if you are logged in...",
+        return P("A new browser window will open now.", Br(), "Please wait while we check your login status...",
                  hx_get="/check_auth",
                  hx_swap="outerHTML",
                  hx_trigger="every 1s")
     elif not is_logged_in:
         return (H2("Login Instructions"),
-                P("A new browser window will open. Please login with both your spotify and youtube music accounts.",
-                  "After logging in, please click on the button below"),
+                Div(
+                    P("It seems you are not logged in. Please follow the instructions below to login."),
+                    Ul(
+                        Li("Switch to the new chrome browser window that opened."),
+                        Li("It will have the Spotify login page already opened. Login with your Spotify account in that tab."),
+                        Li("After logging in to spotify, ", Strong("(Do not close the spotify tab!) "), "Open a new tab and login to your google account that you want to use for YouTube Music."),
+                        Li("After logging in to both accounts, switch back to the spotify tab and click the 'Done' button below."),
+                    ),
+                ),
                 Button("Done", hx_get="/user_confirm_login", id="done-button",hx_swap="innerHTML",hx_target=".main-view"))
     else:
         return RedirectResponse("/user_confirm_login")
@@ -64,7 +73,8 @@ def get():
 def get():
     global user_confirm_login_spot
     user_confirm_login_spot = True
-    return P("Please wait while we load your spotify library...", 
+    return P(Strong("Thanks for logging In!"), Br(), "Please wait while we load your spotify library...", Br(),
+            "This usually takes 30-40 seconds.",
              hx_trigger="every 1s", 
              hx_get="/is_library_built",
              hx_swap="innerHTML",hx_target=".main-view")
@@ -83,11 +93,13 @@ def get():
 
 @app.get("/library")
 def get():
-    global spot
+    global spot, loaded_library
     library = spot.library
     layout = Div(
+        P("Thanks for waiting! Your library is ready.") if not loaded_library else None,
+        P("Select any playlist to get started."),
         H3("Misc."),
-        A("Liked Songs", hx_get="/uri/liked", hx_target=".main-view"),
+        Ol(Li(A("Liked Songs", hx_get="/uri/liked", hx_target=".main-view"))),
         H3("Albums"),
         Ol(*[Li(A(al['name'],hx_get=f"/uri/{al['uri']}?title={al['name']}", hx_target=".main-view")) for al in library['Albums']]),
         H3("Playlists"),
@@ -95,7 +107,8 @@ def get():
         H3("Artists"),
         Ol(*[Li(A(at['name'],hx_get=f"/uri/{at['uri']}?title={at['name']}", hx_target=".main-view")) for at in library['Artists']])
     )
-    return Titled("Spotify Library"), layout
+    loaded_library = True
+    return Title("Spotify Library"), layout
 
 @app.get("/initialized")
 def get():
@@ -105,6 +118,8 @@ def get():
 
 @app.get("/uri/{uri}")
 def get(uri:str, title:str="Liked Songs"):
+    global current_playlist_title
+    current_playlist_title = title
     if "playlist" in uri:
         return LibraryItem(title,uri,"playlist")
     if "album" in uri:
@@ -152,6 +167,13 @@ class LibraryItem:
         old_playlist = items
         layout = Div(
             Titled(f"{self.title} | {self.uri_type.title()}"),
+            P("Click on the button at the end of the page to start the converting process."),
+            P("Once you click it, wait until all the songs have been fetched. After that:"),
+            Ul(
+                Li("Deselct any songs you don't want to be added to the new playlist."),
+                Li("Redo the prediction for any incorrect songs by clicking the refresh button."),
+                Li("Once you are satisfied, click the 'Save Selection' button to save your selection."),
+            ),
             # creating just a table for now, easy to debug
             Table(
                 Tr(Th("Original Title"), Th("Original Artists"), Th("New Title"), Th("New Artists")),
@@ -263,12 +285,12 @@ def save_selection(req):
             new_playlist["items"][idx][2] = False
         else:
             new_playlist["items"][idx][2] = True
-    form = Form(Label('Playlist Title',Input(type="text", name="title")),
+    form = Form(Label('Playlist Title',Input(type="text", name="title", value=current_playlist_title)),
                 Label('Description (Optional)',Input(type="textarea", name="desc")),
                 Button("Submit"),
                 action="/make_playlist", method="post")
 
-    return P(f"Saved!"), form
+    return P("Your selection has been saved. If required change the title and description of the playlist and click submit."), form
 
 
 @app.post('/make_playlist')
@@ -276,7 +298,10 @@ def make_playlist(title:str,desc:str=""):
     global new_playlist, yt
     vid_ids = [item[-1] for item in new_playlist["items"] if item[2] == True]
     if yt.create_and_add(title,desc,vid_ids):
-        return P("Success!")
+        return (H2("Successfully Created Your Playlist!"),
+                P("You can now view your new playlist on YouTube Music."),
+                P("You will be now redirected to the home page in 10 seconds."),
+                Script("setTimeout(() => {window.location.href = '/';}, 10000)"))
     else:
         return P("Some error occured.")
 
