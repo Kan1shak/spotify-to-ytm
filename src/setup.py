@@ -64,7 +64,6 @@ class SetupManager:
         except TimeoutException:
             logged_in = True
         if not logged_in:
-            print("waiting",end="")
             user_confirm = False
             requests.get("http://localhost:5001/update_login?status=false")
             while not user_confirm:
@@ -143,7 +142,7 @@ class SetupManager:
         }
 
         response = requests.get(url, headers=headers, params=params)
-        print('Success!' if response.status_code == 200 else f"Error! Code: {response.status_code}")
+        print('' if response.status_code == 200 else f"Error! Code: {response.status_code}")
         
         if response.status_code == 200:
             res_j = json.loads(response.text)
@@ -176,7 +175,6 @@ class SetupManager:
                     continue
 
                 if data['__typename'] == 'Artist':
-                    print(f"{1+cnt}. {data['profile']['name']} ({data['__typename']})")
                     self.library['Artists'].append({
                         'name' : data['profile']['name'],
                         'uri' :  data['uri'],
@@ -192,7 +190,6 @@ class SetupManager:
                     })
                     continue 
 
-                print(f"{1+cnt}. {data['name']} ({data['__typename']})")
                 self.library['Playlists'].append({
                     'name' : data['name'],
                     'uri' :  data['uri'],
@@ -209,7 +206,6 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -222,7 +218,6 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -238,7 +233,6 @@ class SetupManager:
                     client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['LikedSongs'] = persisted_query
-                        print(f"Liked_{persisted_query= :>10}")
                         return True
         return False
 
@@ -250,7 +244,6 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -268,7 +261,6 @@ class SetupManager:
                     client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['Playlists'] = persisted_query
-                        print(f"Playlists_{persisted_query= :>10}")
                         return True
         return False
 
@@ -280,7 +272,6 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -298,7 +289,6 @@ class SetupManager:
                     client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['Albums'] = persisted_query
-                        print(f"Albums_{persisted_query= :>10}")
                         return True
         return False        
 
@@ -310,7 +300,6 @@ class SetupManager:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
             )
-            #print("found it!")
         except TimeoutException:
             print("woopsies")
 
@@ -328,7 +317,6 @@ class SetupManager:
                     client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
                         self.persisted_qs['Artists'] = persisted_query
-                        print(f"Artists_{persisted_query= :>10}")
                         return True
         return False
 
@@ -399,7 +387,6 @@ class SetupManager:
                 url = request["url"]
                 # `browse?` is what we need for the cookies
                 if "browse?" in url:
-                    print(f"{url = :<10}")
                     self.yt_cookies = request["headers"]
                     cookies_j = self._get_cookies()
                     extracted_c = ""
@@ -407,5 +394,4 @@ class SetupManager:
                         c = f"{cookie['name']}={cookie['value']}; "
                         extracted_c += c
                     self.yt_cookies['cookie'] = extracted_c[:-2]
-                    print(f"{self.yt_cookies=}")
                     return True

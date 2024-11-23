@@ -47,7 +47,6 @@ class YT_Music:
             if  res_type == "video" or res_type == "song":
                 current_str = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
                 if current_str in self.filter_list[q]:
-                    print(f"filtered this bozo: {current_str}")
                     continue
                 searchable_text = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
                 search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])

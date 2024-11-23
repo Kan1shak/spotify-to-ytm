@@ -83,11 +83,11 @@ def get():
 def get():
     global is_initialized
     if not is_initialized:
-            return P("Please wait while we load your spotify library...", 
+            return P(Strong("Thanks for logging In!"), Br(), "Please wait while we load your spotify library...", Br(),
+            "This usually takes 30-40 seconds.",
              hx_trigger="every 1s", 
              hx_get="/is_library_built",
-             hx_swap="innerHTML",hx_target=".main-view"
-             )
+             hx_swap="innerHTML",hx_target=".main-view")
     else:
         return RedirectResponse("/library")
 
