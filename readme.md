@@ -22,6 +22,7 @@ Effortlessly transfer your entire Spotify music library to YouTube Music with a 
 - Python 3.x
 - Spotify account
 - YouTube Music account
+- Google-Chrome or Chromium
 
 ## Installation
 
