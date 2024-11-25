@@ -70,6 +70,39 @@ python gui.py
    - Enter a title (optional description)
    - Click Submit to create the playlist on YouTube Music
 
+## FAQ
+
+#### Q: I am getting this error: ModuleNotFoundError: No module named 'distutils'
+**A:** There seems to be an issue with the latest Python version removing the distutils package. To fix this, you can run this command in your terminal:
+
+```bash
+pip install setuptools
+```
+
+After this, it should work as normal.
+
+#### Q: I am totally new to Python, how do I get started?
+**A:** First of all, make sure you have Python installed. If you don't, you can download the installer from [the official Python website](https://www.python.org/downloads/release/python-3127/). I would recommend watching [this 2-minute tutorial](https://www.youtube.com/watch?v=vXbEju8Fo3c) on how to properly install Python.
+
+After it's installed, follow these steps:
+
+1. Open the project folder from GitHub in your file explorer
+2. Right-click anywhere inside that folder and choose the "Open in Terminal" option
+3. Run these two commands in order:
+
+```bash
+pip install -r requirements.txt
+python gui.py
+```
+
+**Note:** You only need to run the first command (`pip install -r requirements.txt`) once.
+
+To run the app again in the future:
+- Open the project folder
+- Right-click to open in terminal
+- Run the command: `python gui.py`
+
+
 ## Dependencies
 
 ### External Libraries
