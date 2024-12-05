@@ -3,3 +3,4 @@ requests
 ytmusicapi
 thefuzz
 python-fasthtml
+setuptools
