@@ -158,45 +158,49 @@ class SetupManager:
             
             for cnt, item in enumerate(res_j['data']['me']['libraryV3']['items']):
                 data = item['item']['data']
+                try:
+                    if data['__typename'] == 'PseudoPlaylist':
+                        self.library['HasLikedSongs'] = True
+                        continue
 
-                if data['__typename'] == 'PseudoPlaylist':
-                    self.library['HasLikedSongs'] = True
-                    continue
+                    if data['__typename'] == 'NotFound':
+                        self.library['TrashItems'] += 1
+                        continue
+                    
+                    if data['__typename'] == 'Folder':
+                        self.library['Folders'].append({
+                            'name' : data['name'],
+                            'uri' :  data['uri'],
+                        })
+                        continue
 
-                if data['__typename'] == 'NotFound':
-                    self.library['TrashItems'] += 1
-                    continue
-                
-                if data['__typename'] == 'Folder':
-                    self.library['Folders'].append({
-                        'name' : data['name'],
-                        'uri' :  data['uri'],
-                    })
-                    continue
+                    if data['__typename'] == 'Artist':
+                        self.library['Artists'].append({
+                            'name' : data['profile']['name'],
+                            'uri' :  data['uri'],
+                            # TODO: 'thumb'
+                        })
+                        continue
+                    
+                    if data['__typename'] == 'Album':
+                        self.library['Albums'].append({
+                            'name' : data['name'],
+                            'uri' :  data['uri'],
+                            # TODO: 'thumb'
+                        })
+                        continue 
 
-                if data['__typename'] == 'Artist':
-                    self.library['Artists'].append({
-                        'name' : data['profile']['name'],
-                        'uri' :  data['uri'],
-                        # TODO: 'thumb'
-                    })
-                    continue
-                
-                if data['__typename'] == 'Album':
-                    self.library['Albums'].append({
-                        'name' : data['name'],
-                        'uri' :  data['uri'],
-                        # TODO: 'thumb'
-                    })
-                    continue 
+                    if data['__typename'] == 'Playlist':
+                        self.library['Playlists'].append({
+                            'name' : data['name'],
+                            'uri' :  data['uri'],
+                            # TODO: 'thumb'
+                        })
+                        continue
+                except KeyError:
+                    raise KeyError(f"KeyError: {data['__typename']}\nMore info: {item}")
+                print(f"Unsuported type: {data['__typename']}\nMore info: {item}")
 
-                if data['__typename'] == 'Playlist':
-                    self.library['Playlists'].append({
-                        'name' : data['name'],
-                        'uri' :  data['uri'],
-                        # TODO: 'thumb'
-                    })
-                    continue
         return client_token, authorization
 
     def _get_persisted_liked(self):
