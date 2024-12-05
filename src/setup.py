@@ -190,11 +190,13 @@ class SetupManager:
                     })
                     continue 
 
-                self.library['Playlists'].append({
-                    'name' : data['name'],
-                    'uri' :  data['uri'],
-                    # TODO: 'thumb'
-                })
+                if data['__typename'] == 'Playlist':
+                    self.library['Playlists'].append({
+                        'name' : data['name'],
+                        'uri' :  data['uri'],
+                        # TODO: 'thumb'
+                    })
+                    continue
         return client_token, authorization
 
     def _get_persisted_liked(self):
