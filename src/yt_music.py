@@ -26,6 +26,15 @@ class YT_Music:
                 search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
+        if len(search_arr) == 0:
+            # this is probably because the query is too long
+            # so we remove the last artist in the query and try again
+            if len(q.split(',')) > 1:
+                q = q.split(',')
+                q = ", ".join(q[:-1])
+                return self.search_one(q,search_from_limit,filter=filter)
+            else:
+                return self.search_one(q,search_from_limit,filter='')
         choice, confidence = process.extractOne(q, search_arr)
         if confidence < 85 and filter != '':
             return self.search_one(q,search_from_limit,filter='')
