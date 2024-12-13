@@ -143,7 +143,7 @@ def fetch_equivalents(uri: str):
         items, _ = spot.get_liked()
     for item in items:
         song_title, artist_name = item
-        title, artist, _, vid_id = yt.search_one(f"{song_title} {artist_name}")
+        title, artist, _, vid_id = yt.search_one(f"{song_title} ,{artist_name}")
         new_playlist['items'].append([title,artist,True,vid_id])
 
 
