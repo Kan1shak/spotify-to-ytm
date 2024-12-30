@@ -1,3 +1,5 @@
+#### ⚠️ This currently breaks if your Spotify account is set to any language other than English. Before running it, please temporarily change your Spotify account's language to English while I work on a fix.
+
 # Spotify to YouTube Music Playlist Converter
 
 Effortlessly transfer your entire Spotify music library to YouTube Music with a powerful, user-friendly Python conversion tool.
