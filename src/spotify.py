@@ -38,7 +38,7 @@ class SpotifyManager:
         endpoint = 'https://api-partner.spotify.com/pathfinder/v1/query'
         params = {
             'operationName': f'{operation}',
-            'variables': f'{{{uri + "," if uri else ""}"offset":0,"limit":{limit}}}',
+            'variables': f'{{{uri + "," if uri else ""}"offset":0,"limit":{limit}{',"enableWatchFeedEntrypoint":false' if operation == "fetchPlaylist" else ""}}}',
             'extensions': persisted
         }
         headers = {
