@@ -35,10 +35,20 @@ class SpotifyManager:
         requests.get("http://localhost:5001/initialized")
 
     def _get_res_from_spot(self, operation, persisted, uri=None,limit=50):
+        variables = {
+            "uri" : uri if uri else "",
+            "locale":"",
+            "offset":0,
+            "limit":limit,
+            "enableWatchFeedEntrypoint":False if operation == "fetchPlaylist" else "",
+        }
+        if variables['uri'] == "":
+            del variables['uri']
+        print(json.dumps(variables))
         endpoint = 'https://api-partner.spotify.com/pathfinder/v1/query'
         params = {
             'operationName': f'{operation}',
-            'variables': f'{{{uri + "," if uri else ""}"offset":0,"limit":{limit}{',"enableWatchFeedEntrypoint":false' if operation == "fetchPlaylist" else ""}}}',
+            'variables': json.dumps(variables),
             'extensions': persisted
         }
         headers = {
@@ -60,13 +70,11 @@ class SpotifyManager:
             track = track['track'] if 'track' in track else track['data']
             if track['name'].strip() == '': continue
             artists = "".join([","+artist['profile']['name'] for artist in track['artists']['items']]) if 'artists' in track else ""
-            #extracted.append(track['name']+artists)
-            # we using tuples now, for the gui
             extracted.append((track['name'],artists[1:]))
         return extracted
 
     def get_playlist(self,uri,limit=50):
-        res_j, success = self._get_res_from_spot('fetchPlaylist',self.persisted_queries['Playlists'], '"uri":"'+uri+'"',limit)
+        res_j, success = self._get_res_from_spot('fetchPlaylist',self.persisted_queries['Playlists'], uri,limit)
         if success:
             tracks = res_j['data']['playlistV2']['content']
             total_count = int(tracks['totalCount'])
@@ -79,7 +87,7 @@ class SpotifyManager:
     
     def get_artists(self,uri):
         # currently only choosing the topTracks
-        res_j, success = self._get_res_from_spot('queryArtistOverview',self.persisted_queries['Artists'], '"uri":"'+uri+'","locale":""')
+        res_j, success = self._get_res_from_spot('queryArtistOverview',self.persisted_queries['Artists'], uri)
         if success:
             top_tracks = res_j['data']['artistUnion']['discography']['topTracks']
             extracted = self._extract_from_trackv2(top_tracks['items'])
@@ -87,7 +95,7 @@ class SpotifyManager:
         return res_j, success
 
     def get_albums(self,uri,limit=50):
-        res_j, success = self._get_res_from_spot('getAlbum',self.persisted_queries['Albums'], '"uri":"'+uri+'","locale":""',limit)
+        res_j, success = self._get_res_from_spot('getAlbum',self.persisted_queries['Albums'], uri,limit)
         if success:
             tracks = res_j['data']['albumUnion']['tracksV2']
             total_count = int(tracks['totalCount'])
