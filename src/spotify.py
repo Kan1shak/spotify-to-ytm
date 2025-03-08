@@ -44,7 +44,6 @@ class SpotifyManager:
         }
         if variables['uri'] == "":
             del variables['uri']
-        print(json.dumps(variables))
         endpoint = 'https://api-partner.spotify.com/pathfinder/v1/query'
         params = {
             'operationName': f'{operation}',
