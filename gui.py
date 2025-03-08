@@ -2,6 +2,7 @@ from fasthtml.common import *
 from src.spotify import SpotifyManager
 from src.yt_music import YT_Music
 import threading
+import concurrent.futures
 from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
@@ -129,10 +130,14 @@ def get(uri:str, title:str="Liked Songs"):
     else:
         return LibraryItem(title,uri,"liked")
 
+def fetch_song(item):
+    song_title, artist_name = item
+    title, artist, _, vid_id = yt.search_one(f"{song_title} ,{artist_name}")
+    return [title, artist, True, vid_id]
+
 
 def fetch_equivalents(uri: str):
     global spot, yt, new_playlist
-    new_playlist = {"title" : "", "desc" : "", "items" : []}
     if "playlist" in uri:
         items, _ = spot.get_playlist(uri)
     elif "album" in uri:
@@ -141,10 +146,11 @@ def fetch_equivalents(uri: str):
         items, _ = spot.get_artists(uri)
     else:
         items, _ = spot.get_liked()
-    for item in items:
-        song_title, artist_name = item
-        title, artist, _, vid_id = yt.search_one(f"{song_title} ,{artist_name}")
-        new_playlist['items'].append([title,artist,True,vid_id])
+    
+    new_playlist = {"title": "", "desc": "", "items": []}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        results = executor.map(fetch_song, items)
+        new_playlist['items'].extend(results)
 
 
 @dataclass
