@@ -1,4 +1,7 @@
-import requests, json, os, time
+import requests
+import json 
+import os 
+import time
 from src.setup import SetupManager
 
 class SpotifyManager:
@@ -14,7 +17,6 @@ class SpotifyManager:
                 self.persisted_queries = saved_data['persisted_queries']
                 self.library = saved_data['library']
                 self.session = None
-                requests.get("http://localhost:5001/update_login?status=true")
 
         if not os.path.exists('spotify_auth.json'):
             self.session = SetupManager()

@@ -1,4 +1,6 @@
-import json, requests, urllib
+import json
+import requests
+import urllib
 import time
 import undetected_chromedriver as uc
 from os import path
@@ -65,12 +67,11 @@ class SetupManager:
             logged_in = True
         if not logged_in:
             user_confirm = False
-            requests.get("http://localhost:5001/update_login?status=false")
+            requests.get("http://localhost:5001/update_login?status=false&type=spotify")
             while not user_confirm:
                 time.sleep(1)
                 res = requests.get("http://localhost:5001/check_user_confirmation")
                 user_confirm = "true" in res.text
-        requests.get("http://localhost:5001/update_login?status=true")
         return logged_in
     
     @staticmethod
@@ -354,8 +355,13 @@ class SetupManager:
             except:
                 raise "Network Error"
         if not logged_in:
-            input("Please log in to Youtube Music first!\nYou only have to do this once.\n"
-                  "Press any key after you have successfully logged in.")
+            user_confirm = False
+            requests.get("http://localhost:5001/update_login?status=false&type=ytm")
+            while not user_confirm:
+                time.sleep(1)
+                res = requests.get("http://localhost:5001/check_user_confirmation")
+                user_confirm = "true" in res.text
+        requests.get("http://localhost:5001/update_login?status=true")
         return logged_in
     
     def _get_cookies(self):

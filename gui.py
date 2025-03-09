@@ -10,16 +10,21 @@ icon_link = Link(rel="stylesheet", href="https://www.nerdfonts.com/assets/css/we
 app, rt = fast_app(debug=True,hdrs=(picolink,icon_link))
 
 user_confirm_login_spot = is_initialized = False
-is_logged_in = None
+login_statuses = {
+    "status": None,
+    "type": None
+}
 spot = yt = None
 loaded_library = False
 current_playlist_title = None
 
 def start_sess():
-    global is_logged_in,spot,yt
+    global login_statuses,spot,yt
     spot = SpotifyManager()
     yt = YT_Music()
-    is_logged_in = True
+    login_statuses["status"] = True
+    login_statuses["type"] = None
+
 
 @app.get("/")
 def get():
@@ -33,13 +38,27 @@ def get():
 
 @app.get("/check_auth")
 def get():
-    global is_logged_in
-    if is_logged_in == None:
+    global login_statuses
+    if login_statuses["status"] == None:
         return P("A new browser window will open now.", Br(), "Please wait while we check your login status...",
                  hx_get="/check_auth",
                  hx_swap="outerHTML",
                  hx_trigger="every 1s")
-    elif not is_logged_in:
+    
+    elif login_statuses["type"] == "ytm":
+        return (H2("Login Instructions"),
+                Div(
+                    P("It seems you are logged in to Spotify but not to YouTube Music. Please follow the instructions below to login."),
+                    Ul(
+                        Li("Switch to the new chrome browser window that opened."),
+                        Li("It might have a single tab opened with YouTube Music."),
+                        Li("Do not close that tab, just open a new tab and login to your google account that you want to use for YouTube Music."),
+                        Li("After logging in, switch back to the original tab and click the 'Done' button below."),
+                    ),
+                ),
+                Button("Done", hx_get="/user_confirm_login", id="done-button",hx_swap="innerHTML",hx_target=".main-view"))
+    
+    elif not login_statuses["status"]:
         return (H2("Login Instructions"),
                 Div(
                     P("It seems you are not logged in. Please follow the instructions below to login."),
@@ -51,14 +70,16 @@ def get():
                     ),
                 ),
                 Button("Done", hx_get="/user_confirm_login", id="done-button",hx_swap="innerHTML",hx_target=".main-view"))
+    
     else:
         return RedirectResponse("/user_confirm_login")
 
 
 @app.get("/update_login")
-def get(status:bool=None):
-    global is_logged_in
-    is_logged_in = status
+def get(status:bool=None, type:str=None):
+    global login_statuses
+    login_statuses["status"] = status
+    login_statuses["type"] = type
 
 @app.get("/start")
 def get():
@@ -132,7 +153,11 @@ def get(uri:str, title:str="Liked Songs"):
 
 def fetch_song(item):
     song_title, artist_name = item
-    title, artist, _, vid_id = yt.search_one(f"{song_title} ,{artist_name}")
+    try:
+        title, artist, _, vid_id = yt.search_one(f"{song_title} ,{artist_name}")
+        print(f"Fetched Song: Title: {title}, Artist: {artist}")
+    except Exception as e:
+        print(e)
     return [title, artist, True, vid_id]
 
 
@@ -255,10 +280,11 @@ def get(uri:str):
     threading.Thread(target=fetch_equivalents, daemon=True,kwargs={'uri':uri}).start()
     return Button("Fetching...",
                     hx_get="/new_table", 
-                    hx_trigger="every 0.5s",
+                    hx_trigger="every 2s",
                     hx_swap="outerHTML",
                     hx_target="table",
-                    id = "update-btn")
+                    id = "update-btn",
+                    disabled=True)
 
 @app.get("/refetch_item")
 def get(title:str,artist:str,filter_str:str,idx:int):

@@ -1,4 +1,6 @@
-import os, json
+import os
+import json 
+import requests
 import ytmusicapi
 from thefuzz import process, fuzz
 from src.setup import SetupManager
@@ -11,7 +13,11 @@ class YT_Music:
             with open('yt_headers.json', 'w') as f:
                 json.dump(self.cookies,f)
 
-        self.yt_sess = ytmusicapi.YTMusic("yt_headers.json")
+        try:
+            self.yt_sess = ytmusicapi.YTMusic("yt_headers.json")
+        except Exception as e:
+            print(e)
+        requests.get("http://localhost:5001/update_login?status=true")
         self.filter_list = {}
 
     def search_one(self,q,search_from_limit=25,filter='songs'):
