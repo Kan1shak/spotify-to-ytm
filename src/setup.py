@@ -51,6 +51,12 @@ class SetupManager:
         if not self.yt_cookies:
             self._get_ytm_cookies()
 
+    def __exit__(self):
+        if self._webdriver_running:
+            self.driver.quit()
+            self._webdriver_running = False
+        return self
+
     def _login_spotify(self):
         # opening the homepage
         self.driver.get('https://open.spotify.com')
@@ -99,13 +105,13 @@ class SetupManager:
         # trigger the library request
         try:
             WebDriverWait(self.driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '[aria-label="Expand Your Library"]'))
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[aria-label="Open Your Library"]'))
             )
-            library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Expand Your Library"]')
+            library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
         except TimeoutException:
                 collapse_button = self.driver.find_element(By.CSS_SELECTOR, '[aria-label="Collapse Your Library"]')
                 collapse_button.click()
-                library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Expand Your Library"]')
+                library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
         library_button.click()
 
         # get them logs
