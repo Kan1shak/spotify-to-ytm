@@ -7,7 +7,7 @@ from os import path
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 class SetupManager:
@@ -126,6 +126,11 @@ class SetupManager:
                     if client_token and authorization and persisted_query:
                         return client_token, authorization, persisted_query
         print(f"Could not find the {operation_name} request in the network logs.")
+        if operation_name == "libraryV3":
+            raise Exception("Could not fetch the library data. "\
+                            "Make sure you are logged in to Spotify"\
+                            "and the language is set to English.")
+            
         return None
 
     
@@ -141,12 +146,19 @@ class SetupManager:
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[aria-label="Open Your Library"]'))
             )
             library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
-        except TimeoutException:
+            library_button.click()
+        except TimeoutException or NoSuchElementException:
+            try:
                 collapse_button = self.driver.find_element(By.CSS_SELECTOR, '[aria-label="Collapse Your Library"]')
                 collapse_button.click()
                 library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
-        library_button.click()
-
+                library_button.click()
+            except NoSuchElementException:
+                print("Could not find the library button. Possible reasons:\n" \
+                      "1. You are not logged in to Spotify.\n" \
+                      "2. Your spotify is using a language other than English.")
+                print("Trying to extract the library data from network logs "\
+                      "without clicking the library button...")
         return self._extract_auth_from_network_logs('libraryV3')
 
 

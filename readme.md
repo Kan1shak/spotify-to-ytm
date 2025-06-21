@@ -1,5 +1,5 @@
-> [!CAUTION]
-> This currently breaks if your Spotify account is set to any language other than English. Before running it, please temporarily change your Spotify account's language to English while I work on a fix.
+> [!NOTE]
+> This app *might* break if your Spotify account is set to any language other than English. So if you face issues, please change your Spotify account language to English and try again.
 
 > [!IMPORTANT]  
 > If you are getting an error where the chrome browser pop ups and immediately closes, please update your chrome browser version to the latest to fix this issue.
