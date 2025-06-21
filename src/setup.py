@@ -95,7 +95,40 @@ class SetupManager:
             persisted =  json.dumps(url_j['extensions'])
             return None, None, json.dumps(url_j['extensions'])
 
+    @staticmethod
+    def _extract_auth_from_body(body, headers):
+        try:
+            body_json = json.loads(body)
+            auth = headers['authorization']
+            c_token = headers['client-token']
+            persisted_query = json.dumps(body_json['extensions'])
+            return c_token, auth, persisted_query
+        except KeyError:
+            raise KeyError("Could not extract authorization or client token from the request body.")
+        
 
+    def _extract_auth_from_network_logs(self, operation_name):
+        logs = self.driver.get_log("performance")
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] == "Network.requestWillBeSent":
+                request = message["params"]["request"]
+                url = request["url"]
+                body = request.get("postData", "")
+                if f"operationName={operation_name}" in url:
+                    headers = request["headers"]
+                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
+                    if client_token and authorization and persisted_query:
+                        return client_token, authorization, persisted_query
+                if f'"operationName":"{operation_name}"' in body:
+                    headers = request["headers"]
+                    client_token, authorization, persisted_query = self._extract_auth_from_body(body, headers)
+                    if client_token and authorization and persisted_query:
+                        return client_token, authorization, persisted_query
+        print(f"Could not find the {operation_name} request in the network logs.")
+        return None
+
+    
     def _get_library_auth(self):
         # turning on network logs
         self.driver.execute_cdp_cmd("Network.enable", {})
@@ -114,21 +147,8 @@ class SetupManager:
                 library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
         library_button.click()
 
-        # get them logs
-        logs = self.driver.get_log("performance")
+        return self._extract_auth_from_network_logs('libraryV3')
 
-        for log in logs:
-            message = json.loads(log["message"])["message"]
-            if message["method"] == "Network.requestWillBeSent":
-                request = message["params"]["request"]
-                url = request["url"]
-                
-                # `libraryV3` is what we need for library
-                if "operationName=libraryV3" in url:
-                    headers = request["headers"]
-                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
-                    if client_token and authorization and persisted_query:
-                        return client_token, authorization, persisted_query
 
     def get_library(self):
         client_token, authorization, persisted_query = self._get_library_auth()
@@ -214,7 +234,6 @@ class SetupManager:
         self.driver.get('https://open.spotify.com/collection/tracks')
         self.driver.implicitly_wait(3)
 
-        logs = self.driver.get_log("performance")
         try:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
@@ -226,7 +245,6 @@ class SetupManager:
         self.driver.get('https://open.spotify.com/collection/tracks')
         self.driver.implicitly_wait(3)
 
-        logs = self.driver.get_log("performance")
         try:
             WebDriverWait(self.driver, 7).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="play-button"]'))
@@ -234,19 +252,11 @@ class SetupManager:
         except TimeoutException:
             print("woopsies")
 
-        for log in logs:
-            message = json.loads(log["message"])["message"]
-            if message["method"] == "Network.requestWillBeSent":
-                request = message["params"]["request"]
-                url = request["url"]
-                
-                # `fetchLibraryTracks` is what we need for liked songs
-                if "operationName=fetchLibraryTracks" in url:
-                    headers = request["headers"]
-                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
-                    if client_token and authorization and persisted_query:
-                        self.persisted_qs['LikedSongs'] = persisted_query
-                        return True
+
+        client_token, authorization, persisted_query = self._extract_auth_from_network_logs('fetchLibraryTracks')
+        if client_token and authorization and persisted_query:
+            self.persisted_qs['LikedSongs'] = persisted_query
+            return True
         return False
 
     def _get_persisted_playlists(self):
@@ -260,21 +270,13 @@ class SetupManager:
         except TimeoutException:
             print("woopsies")
 
-        logs = self.driver.get_log("performance")
-
-        for log in logs:
-            message = json.loads(log["message"])["message"]
-            if message["method"] == "Network.requestWillBeSent":
-                request = message["params"]["request"]
-                url = request["url"]
-                
-                # `fetchPlaylist` is what we need for playlists
-                if "operationName=fetchPlaylist" in url or "operationName=fetchPlaylistWithGatedEntityRelations" in url:
-                    headers = request["headers"]
-                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
-                    if client_token and authorization and persisted_query:
-                        self.persisted_qs['Playlists'] = persisted_query
-                        return True
+        client_token, authorization, persisted_query = \
+            self._extract_auth_from_network_logs('fetchPlaylist') or \
+            self._extract_auth_from_network_logs('fetchPlaylistWithGatedEntityRelations')
+        if client_token and authorization and persisted_query:
+            self.persisted_qs['Playlists'] = persisted_query
+            return True
+        
         return False
 
     def _get_persisted_albums(self):
@@ -288,21 +290,10 @@ class SetupManager:
         except TimeoutException:
             print("woopsies")
 
-        logs = self.driver.get_log("performance")
-
-        for log in logs:
-            message = json.loads(log["message"])["message"]
-            if message["method"] == "Network.requestWillBeSent":
-                request = message["params"]["request"]
-                url = request["url"]
-                
-                # `getAlbum` is what we need for playlists
-                if "operationName=getAlbum" in url:
-                    headers = request["headers"]
-                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
-                    if client_token and authorization and persisted_query:
-                        self.persisted_qs['Albums'] = persisted_query
-                        return True
+        client_token, authorization, persisted_query = self._extract_auth_from_network_logs('getAlbum')
+        if client_token and authorization and persisted_query:
+            self.persisted_qs['Albums'] = persisted_query
+            return True
         return False        
 
     def _get_persisted_artists(self):
@@ -316,21 +307,10 @@ class SetupManager:
         except TimeoutException:
             print("woopsies")
 
-        logs = self.driver.get_log("performance")
-
-        for log in logs:
-            message = json.loads(log["message"])["message"]
-            if message["method"] == "Network.requestWillBeSent":
-                request = message["params"]["request"]
-                url = request["url"]
-                
-                # `fetchPlaylist` is what we need for playlists
-                if "operationName=queryArtistOverview" in url:
-                    headers = request["headers"]
-                    client_token, authorization, persisted_query = self._extract_auth(url,headers)
-                    if client_token and authorization and persisted_query:
-                        self.persisted_qs['Artists'] = persisted_query
-                        return True
+        client_token, authorization, persisted_query = self._extract_auth_from_network_logs('queryArtistOverview')
+        if client_token and authorization and persisted_query:
+            self.persisted_qs['Artists'] = persisted_query
+            return True
         return False
 
     def get_persist_queries(self):
