@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
 icon_link = Link(rel="stylesheet", href="https://www.nerdfonts.com/assets/css/webfont.css")
-app, rt = fast_app(debug=True,hdrs=(picolink,icon_link))
+app, rt = fast_app(debug=True,hdrs=(icon_link,))
 
 user_confirm_login_spot = is_initialized = False
 login_statuses = {

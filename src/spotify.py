@@ -2,18 +2,22 @@ import requests
 import json 
 import os 
 import time
-from src.setup import SetupManager
+from src.setup import BROWSER_UA, SetupManager
 
 class SpotifyManager:
     def __init__(self):
         if os.path.exists('spotify_auth.json'):
             with open('spotify_auth.json', 'r') as f:
                 saved_data = json.load(f)
-            if time.time() > saved_data['expires']:
+            saved_library = saved_data.get('library') or {}
+            has_items = bool(saved_library.get('Playlists') or saved_library.get('HasLikedSongs'))
+            if time.time() > saved_data['expires'] or not has_items:
                 os.remove('spotify_auth.json')
             else:
                 self.authorization = saved_data['authorization']
                 self.client_token = saved_data['client_token']
+                self.cookie = saved_data.get('cookie', '')
+                self.user_agent = saved_data.get('user_agent') or BROWSER_UA
                 self.persisted_queries = saved_data['persisted_queries']
                 self.library = saved_data['library']
                 self.session = None
@@ -25,10 +29,14 @@ class SpotifyManager:
             if not self.session.has_p_keys:
                 self.session.get_persist_queries()
             self.persisted_queries = self.session.persisted_qs
+            self.cookie = self.session.cookie
+            self.user_agent = self.session.user_agent
             with open('spotify_auth.json', 'w') as f:
                 json.dump({
                    'client_token'       :   self.client_token,
                    'authorization'      :   self.authorization,
+                   'cookie'             :   self.cookie,
+                   'user_agent'         :   self.user_agent,
                    'library'            :   self.library,
                    'persisted_queries'  :   self.persisted_queries,
                    'expires'            :   time.time() + 60*60 # looks like the tokens expire in 1 hour
@@ -36,7 +44,7 @@ class SpotifyManager:
         
         requests.get("http://localhost:5001/initialized")
 
-    def _get_res_from_spot(self, operation, persisted, uri=None,limit=50):
+    def _get_res_from_spot(self, operation, persisted, uri=None, limit=50, refresh=True):
         variables = {
             "uri" : uri if uri else "",
             "locale":"",
@@ -56,9 +64,21 @@ class SpotifyManager:
             'accept': 'application/json',
             'authorization': self.authorization,
             'client-token': self.client_token,
-            'content-type': 'application/json;charset=UTF-8'
+            'content-type': 'application/json;charset=UTF-8',
+            'user-agent': getattr(self, 'user_agent', BROWSER_UA),
         }
+        if getattr(self, 'cookie', ''):
+            headers['cookie'] = self.cookie
         response = requests.get(endpoint, headers=headers, params=params)
+        if response.status_code in (401, 403) and refresh:
+            if self.session is None:
+                self.session = SetupManager()
+            refreshed = self.session.refresh_spotify_headers()
+            if refreshed:
+                self.client_token, self.authorization = refreshed
+                self.cookie = self.session.cookie
+                self.user_agent = self.session.user_agent
+                return self._get_res_from_spot(operation, persisted, uri, limit, refresh=False)
         if response.status_code == 200:
             res_j = json.loads(response.text)
             return res_j, True

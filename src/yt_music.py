@@ -2,8 +2,40 @@ import os
 import json 
 import requests
 import ytmusicapi
+import ytmusicapi.mixins.search as yt_search_mixin
+import ytmusicapi.parsers.search as yt_search_parser
 from thefuzz import process, fuzz
+from ytmusicapi.navigation import TITLE_TEXT, nav
 from src.setup import SetupManager
+
+
+def _artist_names(result):
+    return [artist["name"] for artist in (result.get("artists") or []) if artist.get("name")]
+
+
+def _tolerate_missing_search_header():
+    """YouTube Music no longer sends musicCardShelfHeaderBasicRenderer on every top result."""
+    original = yt_search_parser.parse_top_result
+
+    def parse_top_result(data, search_result_types):
+        header = data.get("header") or {}
+        if "musicCardShelfHeaderBasicRenderer" not in header:
+            title = nav(data, TITLE_TEXT, True) or ""
+            data = {
+                **data,
+                "header": {
+                    "musicCardShelfHeaderBasicRenderer": {
+                        "title": {"runs": [{"text": title}]}
+                    }
+                },
+            }
+        return original(data, search_result_types)
+
+    yt_search_parser.parse_top_result = parse_top_result
+    yt_search_mixin.parse_top_result = parse_top_result
+
+
+_tolerate_missing_search_header()
 
 class YT_Music:
     def __init__(self):
@@ -27,9 +59,10 @@ class YT_Music:
         search_arr = []
         for result in search_results:
             res_type = result['resultType']
-            if  res_type == "video" or res_type == "song":
-                searchable_text = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
-                search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
+            if res_type == "video" or res_type == "song":
+                artist_names = _artist_names(result)
+                searchable_text = result['title'] + (", " + ", ".join(artist_names) if artist_names else "")
+                search_dict[searchable_text] = (result['videoId'], result.get('artists') or [], result['title'])
                 search_arr.append(searchable_text)
                 if (len(search_arr)) >= 3: break
         if len(search_arr) == 0:
@@ -59,13 +92,13 @@ class YT_Music:
         search_arr = []
         for result in search_results:
             res_type = result['resultType']
-            if  res_type == "video" or res_type == "song":
-                current_str = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
+            if res_type == "video" or res_type == "song":
+                artist_names = _artist_names(result)
+                current_str = result['title'] + (", " + ", ".join(artist_names) if artist_names else "")
                 if current_str in self.filter_list[q]:
                     continue
-                searchable_text = result['title'] + ", " + ", ".join([artist['name'] for artist in result['artists']])
-                search_dict[searchable_text] = (result['videoId'], result['artists'], result['title'])
-                search_arr.append(searchable_text)
+                search_dict[current_str] = (result['videoId'], result.get('artists') or [], result['title'])
+                search_arr.append(current_str)
                 if (len(search_arr)) >= 3: break
         if len(search_arr) == 0:
             if retries > 2:
