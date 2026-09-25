@@ -5,3 +5,11 @@ test.ipynb
 yt_headers.json
 spotify_auth.json
 .sesskey
+.venv/
+tracks_ready.json
+playlists.json
+tracks.json
+peek.json
+spot_state.json
+tabs.json
+yt_*.json

@@ -1,5 +1,5 @@
 > [!NOTE]
-> This app *might* break if your Spotify account is set to any language other than English. So if you face issues, please change your Spotify account language to English and try again.
+> The library button is detected in English and Spanish. Spotify rejects playlist requests that do not carry the browser session cookie captured while Chrome is logged in.
 
 > [!IMPORTANT]  
 > If you are getting an error where the chrome browser pop ups and immediately closes, please update your chrome browser version to the latest to fix this issue.

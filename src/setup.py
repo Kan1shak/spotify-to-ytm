@@ -1,4 +1,5 @@
 import json
+import re
 import requests
 import urllib
 import time
@@ -7,8 +8,12 @@ from os import path
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.common.exceptions import TimeoutException
+
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 class SetupManager:
 
@@ -22,11 +27,7 @@ class SetupManager:
     
     def __init__(self):
         if not self._webdriver_running:
-            d = DesiredCapabilities.CHROME
-            d['goog:loggingPrefs'] = { 'performance':'ALL' } # this took way too long
-            pwd = path.dirname(__file__)
-            self.driver = uc.Chrome(user_data_dir= f"{pwd}{path.sep}webdriver_profile2",desired_capabilities=d)
-            self._webdriver_running = True
+            self._start_driver()
 
             self._login_spotify()
             self.library = {
@@ -47,9 +48,21 @@ class SetupManager:
                 'Playlists' : '',
             }
             self.yt_cookies = None
+            self.cookie = ""
+            self.user_agent = BROWSER_UA
 
         if not self.yt_cookies:
             self._get_ytm_cookies()
+
+    def _start_driver(self):
+        options = uc.ChromeOptions()
+        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+        pwd = path.dirname(__file__)
+        self.driver = uc.Chrome(
+            user_data_dir=f"{pwd}{path.sep}webdriver_profile2",
+            options=options,
+        )
+        self._webdriver_running = True
 
     def __exit__(self):
         if self._webdriver_running:
@@ -119,126 +132,171 @@ class SetupManager:
                     headers = request["headers"]
                     client_token, authorization, persisted_query = self._extract_auth(url,headers)
                     if client_token and authorization and persisted_query:
+                        self._remember_request_headers(headers)
                         return client_token, authorization, persisted_query
                 if f'"operationName":"{operation_name}"' in body:
                     headers = request["headers"]
                     client_token, authorization, persisted_query = self._extract_auth_from_body(body, headers)
                     if client_token and authorization and persisted_query:
+                        self._remember_request_headers(headers)
                         return client_token, authorization, persisted_query
+        seen = set()
+        for log in logs:
+            message = json.loads(log["message"])["message"]
+            if message["method"] != "Network.requestWillBeSent":
+                continue
+            request = message["params"]["request"]
+            blob = request["url"] + " " + request.get("postData", "")
+            match = re.search(r"operationName[=:\"]+([A-Za-z0-9_]+)", blob)
+            if match:
+                seen.add(match.group(1))
         print(f"Could not find the {operation_name} request in the network logs.")
+        if seen:
+            print("Operations seen: " + ", ".join(sorted(seen)))
         if operation_name == "libraryV3":
-            raise Exception("Could not fetch the library data. "\
-                            "Make sure you are logged in to Spotify"\
-                            "and the language is set to English.")
+            raise Exception("Could not fetch the library data. Make sure you are logged in to Spotify.")
             
         return None
 
     
-    def _get_library_auth(self):
-        # turning on network logs
-        self.driver.execute_cdp_cmd("Network.enable", {})
-        # we go back to homepage
-        self.driver.get('https://open.spotify.com')
-        
-        # trigger the library request
-        try:
-            WebDriverWait(self.driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '[aria-label="Open Your Library"]'))
-            )
-            library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
-            library_button.click()
-        except TimeoutException or NoSuchElementException:
-            try:
-                collapse_button = self.driver.find_element(By.CSS_SELECTOR, '[aria-label="Collapse Your Library"]')
-                collapse_button.click()
-                library_button = self.driver.find_element(By.CSS_SELECTOR,'[aria-label="Open Your Library"]')
-                library_button.click()
-            except NoSuchElementException:
-                print("Could not find the library button. Possible reasons:\n" \
-                      "1. You are not logged in to Spotify.\n" \
-                      "2. Your spotify is using a language other than English.")
-                print("Trying to extract the library data from network logs "\
-                      "without clicking the library button...")
-        return self._extract_auth_from_network_logs('libraryV3')
+    def _remember_request_headers(self, headers):
+        lowered = {key.lower(): value for key, value in headers.items()}
+        if lowered.get("cookie"):
+            self.cookie = lowered["cookie"]
+        if lowered.get("user-agent"):
+            self.user_agent = lowered["user-agent"]
 
+    def _pathfinder_headers(self, client_token, authorization):
+        headers = {
+            "accept": "application/json",
+            "authorization": authorization,
+            "client-token": client_token,
+            "content-type": "application/json;charset=UTF-8",
+            "user-agent": getattr(self, "user_agent", BROWSER_UA),
+        }
+        if getattr(self, "cookie", ""):
+            headers["cookie"] = self.cookie
+        return headers
+
+    def refresh_spotify_headers(self):
+        """Grab a fresh pathfinder session from the logged-in Chrome profile."""
+        try:
+            if not self._webdriver_running:
+                self._start_driver()
+            self.driver.execute_cdp_cmd("Network.enable", {})
+            self.driver.get("https://open.spotify.com")
+            time.sleep(4)
+        except Exception:
+            self._webdriver_running = False
+            self._start_driver()
+            self.driver.execute_cdp_cmd("Network.enable", {})
+            self.driver.get("https://open.spotify.com")
+            time.sleep(4)
+
+        for log in self.driver.get_log("performance"):
+            message = json.loads(log["message"])["message"]
+            if message.get("method") != "Network.requestWillBeSent":
+                continue
+            request = message["params"]["request"]
+            blob = request.get("url", "") + " " + request.get("postData", "")
+            if "pathfinder" not in blob:
+                continue
+            headers = {key.lower(): value for key, value in request["headers"].items()}
+            if "authorization" in headers and "client-token" in headers:
+                self._remember_request_headers(headers)
+                return headers["client-token"], headers["authorization"]
+        return None
+
+    def _click_library(self):
+        open_labels = (
+            "Open Your Library",
+            "Expand Your Library",
+            "Abrir Tu biblioteca",
+            "Expandir Tu biblioteca",
+        )
+        for label in open_labels:
+            buttons = self.driver.find_elements(By.CSS_SELECTOR, f'[aria-label="{label}"]')
+            if buttons:
+                buttons[0].click()
+                return True
+        for button in self.driver.find_elements(By.CSS_SELECTOR, "button[aria-label]"):
+            label = (button.get_attribute("aria-label") or "").lower()
+            if "collapse your library" in label or "comprimir tu biblioteca" in label:
+                return True
+            if "library" in label or "biblioteca" in label:
+                button.click()
+                return True
+        return False
+
+    def _get_library_auth(self):
+        self.driver.execute_cdp_cmd("Network.enable", {})
+        self.driver.get("https://open.spotify.com")
+        try:
+            WebDriverWait(self.driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label]"))
+            )
+        except TimeoutException:
+            pass
+        if not self._click_library():
+            print("Could not find the library button. Trying to read the library request anyway.")
+        time.sleep(4)
+        return self._extract_auth_from_network_logs("libraryV3")
 
     def get_library(self):
         client_token, authorization, persisted_query = self._get_library_auth()
-
-        url = 'https://api-partner.spotify.com/pathfinder/v1/query'
+        headers = self._pathfinder_headers(client_token, authorization)
+        url = "https://api-partner.spotify.com/pathfinder/v1/query"
         limit = 50
+        variables = (
+            '{"filters":[],"order":null,"textFilter":"","features":["LIKED_SONGS","YOUR_EPISODES"],'
+            f'"limit":{limit},"offset":0,"flatten":false,"expandedFolders":[],"folderUri":null,'
+            '"includeFoldersWhenFlattening":true}'
+        )
         params = {
-            'operationName': 'libraryV3',
-            'variables': f'{{"filters":[],"order":null,"textFilter":"","features":["LIKED_SONGS","YOUR_EPISODES"],"limit":{limit},"offset":0,"flatten":false,"expandedFolders":[],"folderUri":null,"includeFoldersWhenFlattening":true}}',
-            'extensions': persisted_query
+            "operationName": "libraryV3",
+            "variables": variables,
+            "extensions": persisted_query,
         }
-
-        headers = {
-            'accept': 'application/json',
-            'authorization': authorization,
-            'client-token': client_token,
-            'content-type': 'application/json;charset=UTF-8'
-        }
-
         response = requests.get(url, headers=headers, params=params)
-        print('' if response.status_code == 200 else f"Error! Code: {response.status_code}")
-        
-        if response.status_code == 200:
-            res_j = json.loads(response.text)
-            total_count = res_j['data']['me']['libraryV3']['totalCount']
-            if total_count > limit:
-                params = {
-                    'operationName': 'libraryV3',
-                    'variables': f'{{"filters":[],"order":null,"textFilter":"","features":["LIKED_SONGS","YOUR_EPISODES"],"limit":{(2 + total_count//25)*25},"offset":0,"flatten":false,"expandedFolders":[],"folderUri":null,"includeFoldersWhenFlattening":true}}',
-                    'extensions': persisted_query
-                }
-                response = requests.get(url, headers=headers, params=params)
-                res_j = json.loads(response.text)
-            
-            for cnt, item in enumerate(res_j['data']['me']['libraryV3']['items']):
-                data = item['item']['data']
-                try:
-                    if data['__typename'] == 'PseudoPlaylist':
-                        self.library['HasLikedSongs'] = True
-                        continue
+        if response.status_code != 200:
+            raise Exception(f"Could not fetch the library data ({response.status_code}).")
 
-                    if data['__typename'] == 'NotFound':
-                        self.library['TrashItems'] += 1
-                        continue
-                    
-                    if data['__typename'] == 'Folder':
-                        self.library['Folders'].append({
-                            'name' : data['name'],
-                            'uri' :  data['uri'],
-                        })
-                        continue
+        res_j = response.json()
+        total_count = res_j["data"]["me"]["libraryV3"]["totalCount"]
+        if total_count > limit:
+            variables = (
+                '{"filters":[],"order":null,"textFilter":"","features":["LIKED_SONGS","YOUR_EPISODES"],'
+                f'"limit":{(2 + total_count // 25) * 25},"offset":0,"flatten":false,"expandedFolders":[],'
+                '"folderUri":null,"includeFoldersWhenFlattening":true}'
+            )
+            params["variables"] = variables
+            response = requests.get(url, headers=headers, params=params)
+            res_j = response.json()
 
-                    if data['__typename'] == 'Artist':
-                        self.library['Artists'].append({
-                            'name' : data['profile']['name'],
-                            'uri' :  data['uri'],
-                            # TODO: 'thumb'
-                        })
-                        continue
-                    
-                    if data['__typename'] == 'Album':
-                        self.library['Albums'].append({
-                            'name' : data['name'],
-                            'uri' :  data['uri'],
-                            # TODO: 'thumb'
-                        })
-                        continue 
-
-                    if data['__typename'] == 'Playlist':
-                        self.library['Playlists'].append({
-                            'name' : data['name'],
-                            'uri' :  data['uri'],
-                            # TODO: 'thumb'
-                        })
-                        continue
-                except KeyError:
-                    raise KeyError(f"KeyError: {data['__typename']}\nMore info: {item}")
-                print(f"Unsuported type: {data['__typename']}\nMore info: {item}")
+        for item in res_j["data"]["me"]["libraryV3"]["items"]:
+            data = item["item"]["data"]
+            try:
+                if data["__typename"] == "PseudoPlaylist":
+                    self.library["HasLikedSongs"] = True
+                    continue
+                if data["__typename"] == "NotFound":
+                    self.library["TrashItems"] += 1
+                    continue
+                if data["__typename"] == "Folder":
+                    self.library["Folders"].append({"name": data["name"], "uri": data["uri"]})
+                    continue
+                if data["__typename"] == "Artist":
+                    self.library["Artists"].append({"name": data["profile"]["name"], "uri": data["uri"]})
+                    continue
+                if data["__typename"] == "Album":
+                    self.library["Albums"].append({"name": data["name"], "uri": data["uri"]})
+                    continue
+                if data["__typename"] == "Playlist":
+                    self.library["Playlists"].append({"name": data["name"], "uri": data["uri"]})
+                    continue
+            except KeyError:
+                raise KeyError(f"KeyError: {data['__typename']}\nMore info: {item}")
+            print(f"Unsuported type: {data['__typename']}")
 
         return client_token, authorization
 
@@ -265,7 +323,11 @@ class SetupManager:
             print("woopsies")
 
 
-        client_token, authorization, persisted_query = self._extract_auth_from_network_logs('fetchLibraryTracks')
+        found = self._extract_auth_from_network_logs('fetchLibraryTracks')
+        if not found:
+            print("Liked songs query was not found. Continuing with playlists only.")
+            return False
+        client_token, authorization, persisted_query = found
         if client_token and authorization and persisted_query:
             self.persisted_qs['LikedSongs'] = persisted_query
             return True
@@ -282,9 +344,14 @@ class SetupManager:
         except TimeoutException:
             print("woopsies")
 
-        client_token, authorization, persisted_query = \
-            self._extract_auth_from_network_logs('fetchPlaylist') or \
-            self._extract_auth_from_network_logs('fetchPlaylistWithGatedEntityRelations')
+        found = (
+            self._extract_auth_from_network_logs('fetchPlaylist')
+            or self._extract_auth_from_network_logs('fetchPlaylistWithGatedEntityRelations')
+        )
+        if not found:
+            print("Playlist track query was not found.")
+            return False
+        client_token, authorization, persisted_query = found
         if client_token and authorization and persisted_query:
             self.persisted_qs['Playlists'] = persisted_query
             return True
