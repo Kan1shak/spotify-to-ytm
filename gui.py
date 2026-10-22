@@ -335,7 +335,7 @@ def make_playlist(title:str,desc:str=""):
                 P("You will be now redirected to the home page in 10 seconds."),
                 Script("setTimeout(() => {window.location.href = '/';}, 10000)"))
     else:
-        return P("Some error occured.")
+        return P("Some error occurred.")
 
 if __name__ == '__main__':
     serve()
