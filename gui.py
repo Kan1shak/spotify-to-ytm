@@ -2,6 +2,7 @@ from fasthtml.common import *
 from src.spotify import SpotifyManager
 from src.yt_music import YT_Music
 import threading
+from fasthtml.pico import picolink
 import concurrent.futures
 from dataclasses import dataclass
 from urllib.parse import quote, urlencode
